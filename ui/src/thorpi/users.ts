@@ -252,3 +252,74 @@ export async function deleteUser(user: string, errorHandler: (error: string) => 
       return false;
     });
 }
+
+/**
+ * Resend verification email to a user.
+ * @async
+ * @function
+ * @param {string} username - name of user to send verification email to
+ * @param {(error: string) => void} errorHandler - error handler function
+ * @returns {Promise<boolean>} - request response
+ */
+export async function resendVerificationEmail(username: string, errorHandler: (error: string) => void): Promise<boolean> {
+  const url = '/users/resend/verify/email/' + username;
+  return client
+    .get(url)
+    .then((res) => {
+      if (res?.status == 200) {
+        return true;
+      }
+      return false;
+    })
+    .catch((error) => {
+      parseRequestError(error, errorHandler, 'Resend Verification Email');
+      return false;
+    });
+}
+
+/**
+ * Force logout a user by invalidating their session.
+ * @async
+ * @function
+ * @param {string} username - name of user to force logout
+ * @param {(error: string) => void} errorHandler - error handler function
+ * @returns {Promise<boolean>} - request response
+ */
+export async function forceLogoutUser(username: string, errorHandler: (error: string) => void): Promise<boolean> {
+  const url = '/users/logout/' + username;
+  return client
+    .get(url)
+    .then((res) => {
+      if (res?.status == 200) {
+        return true;
+      }
+      return false;
+    })
+    .catch((error) => {
+      parseRequestError(error, errorHandler, 'Force Logout User');
+      return false;
+    });
+}
+
+/**
+ * Sync users from LDAP.
+ * @async
+ * @function
+ * @param {(error: string) => void} errorHandler - error handler function
+ * @returns {Promise<boolean>} - request response
+ */
+export async function syncLdapUsers(errorHandler: (error: string) => void): Promise<boolean> {
+  const url = '/users/sync/ldap';
+  return client
+    .post(url)
+    .then((res) => {
+      if (res?.status == 200) {
+        return true;
+      }
+      return false;
+    })
+    .catch((error) => {
+      parseRequestError(error, errorHandler, 'Sync LDAP Users');
+      return false;
+    });
+}

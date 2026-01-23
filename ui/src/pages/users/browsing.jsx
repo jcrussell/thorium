@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Badge, ButtonGroup, Button, Card, Col, Form, Modal, Row } from 'react-bootstrap';
 
 // project imports
-import { LoadingSpinner, OverlayTipLeft, Title, Page } from '@components';
+import { LoadingSpinner, OverlayTipLeft, OverlayTipRight, Title, Page } from '@components';
 import { getThoriumRole, useAuth } from '@utilities';
-import { deleteUser, listUsers, updateSingleUser } from '@thorpi';
+import { deleteUser, forceLogoutUser, listUsers, resendVerificationEmail, syncLdapUsers, updateSingleUser } from '@thorpi';
 
 // component to represent each user's info
-const SingleUserInfo = ({ user, impersonate }) => {
+const SingleUserInfo = ({ user, impersonate, onRefresh }) => {
   const [singleUserRole, setSingleUserRole] = useState(user.role);
 
   return (
@@ -37,6 +37,7 @@ const SingleUserInfo = ({ user, impersonate }) => {
             user={user}
             singleUserRole={singleUserRole}
             setSingleUserRole={setSingleUserRole}
+            onRefresh={onRefresh}
           />
         </Col>
       </Row>
@@ -45,8 +46,10 @@ const SingleUserInfo = ({ user, impersonate }) => {
 };
 
 // component for buttons related to each user
-const ManipulateUserButtons = ({ impersonate, username, token, role, user, singleUserRole, setSingleUserRole }) => {
+const ManipulateUserButtons = ({ impersonate, username, token, role, user, singleUserRole, setSingleUserRole, onRefresh }) => {
   const [deleteError, setDeleteError] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [logoutError, setLogoutError] = useState('');
   // Delete user modal state manipulation
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const handleCloseDeleteModal = () => setShowDeleteModal(false);
@@ -55,6 +58,20 @@ const ManipulateUserButtons = ({ impersonate, username, token, role, user, singl
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
   const handleCloseImpersonateModal = () => setShowImpersonateModal(false);
   const handleShowImpersonateModal = () => setShowImpersonateModal(true);
+  // Verify email modal state manipulation
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const handleCloseVerifyModal = () => {
+    setShowVerifyModal(false);
+    setVerifyError('');
+  };
+  const handleShowVerifyModal = () => setShowVerifyModal(true);
+  // Logout modal state manipulation
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const handleCloseLogoutModal = () => {
+    setShowLogoutModal(false);
+    setLogoutError('');
+  };
+  const handleShowLogoutModal = () => setShowLogoutModal(true);
 
   return (
     <ButtonGroup>
@@ -64,6 +81,36 @@ const ManipulateUserButtons = ({ impersonate, username, token, role, user, singl
       >
         <EditRoles role={role} username={username} user={user} setRole={setSingleUserRole} />
       </OverlayTipLeft>
+      {!user.verified && (
+        <>
+          <OverlayTipLeft tip={`Resend verification email to ${username}.`}>
+            <Button className="primary-btn" size="sm" onClick={handleShowVerifyModal}>
+              Verify
+            </Button>
+          </OverlayTipLeft>
+          <Modal show={showVerifyModal} onHide={handleCloseVerifyModal} backdrop="static" keyboard={false}>
+            <Modal.Header closeButton>
+              <Modal.Title>Resend Verification Email?</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              Do you want to resend a verification email to <b>{username}</b>?
+              {verifyError != '' && <Alert variant="danger">{verifyError}</Alert>}
+            </Modal.Body>
+            <Modal.Footer className="d-flex justify-content-center">
+              <Button
+                className="ok-btn"
+                onClick={async () => {
+                  if (await resendVerificationEmail(username, setVerifyError)) {
+                    handleCloseVerifyModal();
+                  }
+                }}
+              >
+                Send
+              </Button>
+            </Modal.Footer>
+          </Modal>
+        </>
+      )}
       <OverlayTipLeft
         tip={`Masquerade as ${username} after logging out of
         your current Thorium Session. This is used to troubleshoot Thorium UI
@@ -92,6 +139,33 @@ const ManipulateUserButtons = ({ impersonate, username, token, role, user, singl
           </Button>
         </Modal.Footer>
       </Modal>
+      <OverlayTipLeft tip={`Force logout ${username} and invalidate their session.`}>
+        <Button className="warning-btn" size="sm" onClick={handleShowLogoutModal}>
+          Logout
+        </Button>
+      </OverlayTipLeft>
+      <Modal show={showLogoutModal} onHide={handleCloseLogoutModal} backdrop="static" keyboard={false}>
+        <Modal.Header closeButton>
+          <Modal.Title>Force Logout?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Do you really want to force logout <b>{username}</b> and invalidate their session?
+          {logoutError != '' && <Alert variant="danger">{logoutError}</Alert>}
+        </Modal.Body>
+        <Modal.Footer className="d-flex justify-content-center">
+          <Button
+            className="warning-btn"
+            onClick={async () => {
+              if (await forceLogoutUser(username, setLogoutError)) {
+                handleCloseLogoutModal();
+                onRefresh();
+              }
+            }}
+          >
+            Confirm
+          </Button>
+        </Modal.Footer>
+      </Modal>
       <OverlayTipLeft tip={`Delete this user.`}>
         <Button className="warning-btn" size="sm" onClick={handleShowDeleteModal}>
           Delete
@@ -112,7 +186,7 @@ const ManipulateUserButtons = ({ impersonate, username, token, role, user, singl
             onClick={async () => {
               if (await deleteUser(username, setDeleteError)) {
                 handleCloseDeleteModal();
-                getUserInfo();
+                onRefresh();
               }
             }}
           >
@@ -279,6 +353,66 @@ const EditRoles = ({ role, username, user, setRole }) => {
   );
 };
 
+// LDAP Sync button component
+const SyncLdapButton = ({ onRefresh }) => {
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleCloseSyncModal = () => {
+    setShowSyncModal(false);
+    setSyncError('');
+    setSyncSuccess(false);
+  };
+  const handleShowSyncModal = () => setShowSyncModal(true);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncError('');
+    setSyncSuccess(false);
+    const result = await syncLdapUsers(setSyncError);
+    setSyncing(false);
+    if (result) {
+      setSyncSuccess(true);
+      onRefresh();
+    }
+  };
+
+  return (
+    <>
+      <OverlayTipLeft tip="Synchronize users from LDAP directory.">
+        <Button className="ok-btn m-1 d-flex justify-content-center" onClick={handleShowSyncModal}>
+          Sync LDAP
+        </Button>
+      </OverlayTipLeft>
+      <Modal show={showSyncModal} onHide={handleCloseSyncModal} backdrop="static" keyboard={false}>
+        <Modal.Header closeButton>
+          <Modal.Title>Sync LDAP Users</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {!syncSuccess && !syncing && 'Do you want to synchronize users from the LDAP directory?'}
+          {syncing && <LoadingSpinner loading={true} />}
+          {syncSuccess && <Alert variant="success">LDAP sync completed successfully.</Alert>}
+          {syncError != '' && <Alert variant="danger">{syncError}</Alert>}
+        </Modal.Body>
+        <Modal.Footer className="d-flex justify-content-center">
+          {!syncSuccess && (
+            <Button className="ok-btn" onClick={handleSync} disabled={syncing}>
+              {syncing ? 'Syncing...' : 'Sync'}
+            </Button>
+          )}
+          {syncSuccess && (
+            <Button className="secondary-btn" onClick={handleCloseSyncModal}>
+              Close
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+    </>
+  );
+};
+
 // component to view a list of users
 const Users = () => {
   const [loading, setLoading] = useState(false);
@@ -301,11 +435,25 @@ const Users = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const UserCountTipMessage = `There are a total of ${users.length} Thorium users.`;
+
   return (
     <Page title="Users · Thorium">
-      <Row className="d-flex justify-content-md-center">
-        <Col xs={1} sm={1} md={1}>
+      <Row>
+        <Col>
+          <h2>
+            <OverlayTipRight tip={UserCountTipMessage}>
+              <Badge bg="" className="count-badge">
+                {users.length}
+              </Badge>
+            </OverlayTipRight>
+          </h2>
+        </Col>
+        <Col className="d-flex justify-content-center">
           <Title>Users</Title>
+        </Col>
+        <Col className="d-flex justify-content-end">
+          <SyncLdapButton onRefresh={getUserInfo} />
         </Col>
       </Row>
       <LoadingSpinner loading={loading}></LoadingSpinner>
@@ -313,7 +461,7 @@ const Users = () => {
         {users.length > 0 &&
           users
             .sort((a, b) => a.username.localeCompare(b.username))
-            .map((user) => <SingleUserInfo key={user.username} user={user} impersonate={impersonate} />)}
+            .map((user) => <SingleUserInfo key={user.username} user={user} impersonate={impersonate} onRefresh={getUserInfo} />)}
       </Row>
     </Page>
   );
