@@ -985,3 +985,4 @@ const ImageFields = ({ image, setRequestImageFields, groups, setHasErrors, showE
 };
 
 export default ImageFields;
+export { ScalerTypes };

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Accordion, Alert, Badge, Button, ButtonToolbar, Col, Form, Modal, Row } from 'react-bootstrap';
+import { Accordion, Alert, Badge, Button, ButtonToolbar, Card, Col, Form, Modal, Row } from 'react-bootstrap';
+import { FaFilter } from 'react-icons/fa';
 
 // project imports
 import {
@@ -19,7 +20,9 @@ import {
   OverlayTipBottom,
   Title,
   Page,
+  SelectInputArray,
 } from '@components';
+import { ScalerTypes } from '@components/images/image_fields';
 import { getGroupRole, getThoriumRole, fetchGroups, fetchImages, fetchSingleImage, useAuth } from '@utilities';
 import { deleteImage, updateImage } from '@thorpi';
 
@@ -27,6 +30,8 @@ const Images = () => {
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState([]);
   const [groups, setGroups] = useState({});
+  const [filters, setFilters] = useState({ search: '', groups: [], scalers: [], generator: null });
+  const [showFilters, setShowFilters] = useState(false);
   const { userInfo, checkCookie } = useAuth();
   let cancelUpdate = false;
 
@@ -47,6 +52,47 @@ const Images = () => {
       cancelUpdate = true;
     };
   }, [groups]);
+
+  // Filter images based on current filters
+  const filteredImages = useMemo(() => {
+    return images.filter((image) => {
+      // Search filter - matches name or description
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const nameMatch = image.name?.toLowerCase().includes(searchLower);
+        const descMatch = image.description?.toLowerCase().includes(searchLower);
+        if (!nameMatch && !descMatch) return false;
+      }
+      // Group filter
+      if (filters.groups.length > 0 && !filters.groups.includes(image.group)) {
+        return false;
+      }
+      // Scaler filter
+      if (filters.scalers.length > 0 && !filters.scalers.includes(image.scaler)) {
+        return false;
+      }
+      // Generator filter
+      if (filters.generator !== null && image.generator !== filters.generator) {
+        return false;
+      }
+      return true;
+    });
+  }, [images, filters]);
+
+  // Get unique groups from images for filter options
+  const availableGroups = useMemo(() => {
+    return [...new Set(images.map((img) => img.group))].sort();
+  }, [images]);
+
+  const updateFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({ search: '', groups: [], scalers: [], generator: null });
+  };
+
+  const hasActiveFilters = filters.search || filters.groups.length > 0 || filters.scalers.length > 0 || filters.generator !== null;
 
   const CreateImage = () => {
     const navigate = useNavigate();
@@ -72,8 +118,8 @@ const Images = () => {
 
   const ImageCountTipMessage =
     getThoriumRole(userInfo.role) == 'Admin'
-      ? `There are a total of ${images.length} Thorium images.`
-      : `There are a total of ${images.length} Thorium images owned by your groups.`;
+      ? `Showing ${filteredImages.length} of ${images.length} Thorium images.`
+      : `Showing ${filteredImages.length} of ${images.length} Thorium images owned by your groups.`;
 
   return (
     <Page title="Images · Thorium">
@@ -82,21 +128,95 @@ const Images = () => {
           <h2>
             <OverlayTipRight tip={ImageCountTipMessage}>
               <Badge bg="" className="count-badge">
-                {images.length}
+                {filteredImages.length} of {images.length}
               </Badge>
             </OverlayTipRight>
           </h2>
         </Col>
         <Col className="d-flex justify-content-center">
           <Title>Images</Title>
+          <OverlayTipRight tip={`${showFilters ? 'Hide' : 'Show'} filters`}>
+            <Button variant="" className="mt-3 clear-btn" onClick={() => setShowFilters(!showFilters)}>
+              <FaFilter size="18" color={hasActiveFilters ? '#305ef2' : undefined} />
+            </Button>
+          </OverlayTipRight>
         </Col>
         <Col className="d-flex justify-content-end">
           <CreateImage />
         </Col>
       </Row>
+      {showFilters && (
+        <Card className="panel mb-3">
+          <Row className="mt-3">
+            <Col className="d-flex justify-content-center">
+              <Form.Control
+                type="text"
+                placeholder="Search by name or description..."
+                value={filters.search}
+                onChange={(e) => updateFilter('search', e.target.value)}
+                style={{ maxWidth: '400px' }}
+              />
+            </Col>
+          </Row>
+          <Row className="mt-3">
+            <Col md={6} className="d-flex flex-column align-items-center mb-2">
+              <small className="mb-1">
+                <b>Groups</b>
+              </small>
+              <div style={{ width: '90%' }}>
+                <SelectInputArray
+                  defaultMessage="Filter by group..."
+                  isCreatable={false}
+                  options={availableGroups}
+                  values={filters.groups}
+                  onChange={(newGroups) => updateFilter('groups', newGroups)}
+                />
+              </div>
+            </Col>
+            <Col md={6} className="d-flex flex-column align-items-center mb-2">
+              <small className="mb-1">
+                <b>Scalers</b>
+              </small>
+              <div style={{ width: '90%' }}>
+                <SelectInputArray
+                  defaultMessage="Filter by scaler..."
+                  isCreatable={false}
+                  options={ScalerTypes}
+                  values={filters.scalers}
+                  onChange={(newScalers) => updateFilter('scalers', newScalers)}
+                />
+              </div>
+            </Col>
+          </Row>
+          <Row className="mt-2 mb-3">
+            <Col className="d-flex justify-content-center align-items-center">
+              <small className="me-2">
+                <b>Generator</b>
+              </small>
+              <Form.Select
+                value={filters.generator === null ? '' : filters.generator ? 'yes' : 'no'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  updateFilter('generator', val === '' ? null : val === 'yes');
+                }}
+                style={{ maxWidth: '100px' }}
+              >
+                <option value="">All</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </Form.Select>
+              {hasActiveFilters && (
+                <Button variant="" className="primary-btn ms-3" onClick={clearFilters}>
+                  Clear
+                </Button>
+              )}
+            </Col>
+          </Row>
+        </Card>
+      )}
       <LoadingSpinner loading={loading}></LoadingSpinner>
       <Accordion alwaysOpen>
-        {images.map((image) => (
+        {filteredImages.map((image) => (
           <Accordion.Item key={`${image.name}_${image.group}`} eventKey={`${image.name}_${image.group}`}>
             <Accordion.Header className="d-flex">
               <Col className="accordion-item-name">
