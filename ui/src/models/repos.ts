@@ -1,5 +1,60 @@
 import { Tags } from './tags';
 
+// Commitish base types
+export type Commit = { hash: string; groups: string[]; timestamp: string };
+export type Branch = { name: string; groups: string[]; timestamp: string };
+export type GitTag = { name: string; groups: string[]; timestamp: string };
+
+export type Commitish =
+  | { Commit: Commit }
+  | { Branch: Branch }
+  | { Tag: GitTag };
+
+// CommitishDetails with full metadata
+export type CommitDetails = {
+  hash: string;
+  groups: string[];
+  timestamp: string;
+  author: string;
+  topic?: string;
+  description?: string;
+  truncated: boolean;
+};
+export type BranchDetails = {
+  name: string;
+  groups: string[];
+  commit: string;
+  timestamp: string;
+};
+export type GitTagDetails = {
+  name: string;
+  groups: string[];
+  commit: string;
+  author: string;
+  timestamp: string;
+};
+
+export type CommitishDetails =
+  | { Commit: CommitDetails }
+  | { Branch: BranchDetails }
+  | { Tag: GitTagDetails };
+
+export type CommitishKinds = 'Commit' | 'Branch' | 'Tag';
+
+export type CommitishListParams = {
+  cursor?: string;
+  start?: string;
+  end?: string;
+  limit?: number;
+  groups?: string[];
+  kinds?: CommitishKinds[];
+};
+
+export type CommitishCursor = {
+  data: CommitishDetails[];
+  cursor?: string;
+};
+
 export type RepoCheckout = {
   /// Checkout a commit in detached mode
   Commit?: string;

@@ -72,17 +72,24 @@ const buildReactionsList = (selectedPipelines, tags) => {
   return reactionList;
 };
 
-// submit reactions for a sha256 for a partially build reaction list containing
+// submit reactions for a sha256 or repoPath for a partially build reaction list containing
 // reaction info for the selected pipelines
-const submitReactions = async (sha256, reactionList) => {
+const submitReactions = async (sha256, reactionList, repoPath = null) => {
   const reactionRunResults = [];
   for (const reaction of reactionList) {
-    reaction.samples = [sha256];
+    // Use repos if repoPath is provided, otherwise use samples
+    if (repoPath) {
+      reaction.repos = [repoPath];
+    } else {
+      reaction.samples = [sha256];
+    }
+
+    const targetId = repoPath || sha256;
 
     // handle adding the error to the results object for rendering
     const handleReactionCreationFailure = (error) => {
       reactionRunResults.push({
-        error: 'Failed to submit ' + reaction.pipeline + ' for ' + sha256 + ': ' + error,
+        error: 'Failed to submit ' + reaction.pipeline + ' for ' + targetId + ': ' + error,
         group: reaction.group,
         pipeline: reaction.pipeline,
       });
@@ -328,7 +335,7 @@ const orderComparePipeline = (a, b) => {
   return (a.group + a.name).localeCompare(b.group + b.name);
 };
 
-const RunPipelines = ({ sha256 }) => {
+const RunPipelines = ({ sha256, repoPath }) => {
   const { userInfo } = useAuth();
   const [reactionsList, setReactionsList] = useState([]);
   const [runReactionResponses, setRunReactionResponses] = useState([]);
@@ -338,7 +345,7 @@ const RunPipelines = ({ sha256 }) => {
   // this must be wrapped in a function object because of the async call
   const handleSubmitReactions = async () => {
     setRunning(true);
-    const runResponses = await submitReactions(sha256, reactionsList);
+    const runResponses = await submitReactions(sha256, reactionsList, repoPath);
     setRunReactionResponses(runResponses);
     setRunning(false);
   };
@@ -360,7 +367,7 @@ const RunPipelines = ({ sha256 }) => {
   );
 };
 
-const ReactionStatus = ({ sha256, autoRefresh }) => {
+const ReactionStatus = ({ sha256, repoPath, autoRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [reactionsList, setReactionsList] = useState([]);
   const [reactionsMap, setReactionsMap] = useState({});
@@ -370,6 +377,9 @@ const ReactionStatus = ({ sha256, autoRefresh }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDeleteItems] = useState(5);
   const [deleteReactionResponses, setDeleteReactionResponses] = useState([]);
+
+  // Use repoPath as tag if provided, otherwise use sha256
+  const tagFilter = repoPath || sha256;
 
   const getReactionsList = async () => {
     setLoading(true);
@@ -381,7 +391,7 @@ const ReactionStatus = ({ sha256, autoRefresh }) => {
           let cursor = null;
           // need to get all reactions in chunks of 100 until there are no more left
           while (moreReactions) {
-            const reactionsList = await listReactions(group, checkCookie, '', sha256, true, cursor, 10000);
+            const reactionsList = await listReactions(group, checkCookie, '', tagFilter, true, cursor, 10000);
             if (reactionsList) {
               // add returned reactions to local reactions array
               reactions.push(...reactionsList.details);
@@ -402,7 +412,7 @@ const ReactionStatus = ({ sha256, autoRefresh }) => {
     }
   };
 
-  // get a list of reactions by the sha256 tag
+  // get a list of reactions by the sha256 or repoPath tag
   useEffect(() => {
     // only trigger reaction status API requests when component is being viewed
     if (autoRefresh) {
@@ -417,7 +427,7 @@ const ReactionStatus = ({ sha256, autoRefresh }) => {
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userInfo, sha256, autoRefresh]);
+  }, [userInfo, sha256, repoPath, autoRefresh]);
 
   const handleSelectionChange = (key) => {
     setDeleteReactionResponses([]);
