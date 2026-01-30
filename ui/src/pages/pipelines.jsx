@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Accordion, Alert, Badge, Button, ButtonToolbar, ButtonGroup, Col, Form, Modal, Row } from 'react-bootstrap';
 import { FaQuestionCircle } from 'react-icons/fa';
 import { default as MarkdownHtml } from 'react-markdown';
@@ -15,6 +16,9 @@ import {
   SimpleSubtitle,
   Title,
   Page,
+  Omnibar,
+  parseQueryString,
+  DEFAULT_FILTER_STATE,
 } from '@components';
 import { getGroupRole, getThoriumRole, fetchGroups, useAuth } from '@utilities';
 import { createPipeline, deletePipeline, listPipelines, updatePipeline } from '@thorpi';
@@ -23,7 +27,22 @@ const Pipelines = () => {
   const [loading, setLoading] = useState(false);
   const [pipelines, setPipelines] = useState([]);
   const [groups, setGroups] = useState({});
+  const [filters, setFilters] = useState(DEFAULT_FILTER_STATE);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userInfo, checkCookie } = useAuth();
+
+  // Get current username for @me expansion
+  const currentUser = userInfo?.username || '';
+
+  // Initialize filters from URL on mount (or when user becomes available for @me expansion)
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      const parsed = parseQueryString(q, currentUser);
+      setFilters(parsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
 
   // get detailed pipeline info for pipelines in each group
   const fetchPipelines = async () => {
@@ -51,6 +70,51 @@ const Pipelines = () => {
     fetchPipelines();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
+
+  // Filter pipelines based on current filters
+  const filteredPipelines = useMemo(() => {
+    return pipelines.filter((pipeline) => {
+      // Search filter - matches name or description
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const nameMatch = pipeline.name?.toLowerCase().includes(searchLower);
+        const descMatch = pipeline.description?.toLowerCase().includes(searchLower);
+        if (!nameMatch && !descMatch) return false;
+      }
+      // Group inclusion filter
+      if (filters.groups.length > 0 && !filters.groups.includes(pipeline.group)) {
+        return false;
+      }
+      // Group exclusion filter
+      if (filters.excludeGroups.length > 0 && filters.excludeGroups.includes(pipeline.group)) {
+        return false;
+      }
+      // Creator inclusion filter
+      if (filters.creators.length > 0 && !filters.creators.includes(pipeline.creator)) {
+        return false;
+      }
+      // Creator exclusion filter
+      if (filters.excludeCreators.length > 0 && filters.excludeCreators.includes(pipeline.creator)) {
+        return false;
+      }
+      return true;
+    });
+  }, [pipelines, filters]);
+
+  // Get unique groups from pipelines for filter options
+  const availableGroups = useMemo(() => {
+    return [...new Set(pipelines.map((p) => p.group))].sort();
+  }, [pipelines]);
+
+  // Get unique creators from pipelines for filter options
+  const availableCreators = useMemo(() => {
+    return [...new Set(pipelines.map((p) => p.creator).filter(Boolean))].sort();
+  }, [pipelines]);
+
+  // Handle filter submission (syncs to URL)
+  const handleFilterSubmit = (newFilters, queryString) => {
+    setSearchParams(queryString ? { q: queryString } : {});
+  };
 
   /**
    * Update a Thorium pipeline
@@ -143,29 +207,46 @@ const Pipelines = () => {
 
   const PipelineCountTipMessage =
     getThoriumRole(userInfo.role) == 'Admin'
-      ? `There are a total of ${pipelines.length} Thorium pipelines.`
-      : `There are a total of ${pipelines.length} Thorium pipelines owned by your groups.`;
+      ? `Showing ${filteredPipelines.length} of ${pipelines.length} Thorium pipelines.`
+      : `Showing ${filteredPipelines.length} of ${pipelines.length} Thorium pipelines owned by your groups.`;
 
   // Display pipeline accordion page headers
   const PipelineHeader = () => {
     return (
-      <div className="d-flex justify-content-between ">
-        <div>
-          <h2>
-            <OverlayTipRight tip={PipelineCountTipMessage}>
-              <Badge bg="" className="count-badge">
-                {pipelines.length}
-              </Badge>
-            </OverlayTipRight>
-          </h2>
-        </div>
-        <Title>Pipelines</Title>
-        <div>
-          <h2>
+      <>
+        <Row>
+          <Col>
+            <h2>
+              <OverlayTipRight tip={PipelineCountTipMessage}>
+                <Badge bg="" className="count-badge">
+                  {filteredPipelines.length} of {pipelines.length}
+                </Badge>
+              </OverlayTipRight>
+            </h2>
+          </Col>
+          <Col className="d-flex justify-content-center">
+            <Title>Pipelines</Title>
+          </Col>
+          <Col className="d-flex justify-content-end">
             <CreatePipeline />
-          </h2>
-        </div>
-      </div>
+          </Col>
+        </Row>
+        <Row className="mb-3">
+          <Col>
+            <Omnibar
+              filters={filters}
+              onChange={setFilters}
+              onSubmit={handleFilterSubmit}
+              availableGroups={availableGroups}
+              availableScalers={[]}
+              availableCreators={availableCreators}
+              availablePipelines={[]}
+              currentUser={currentUser}
+              placeholder="Filter pipelines... group:name creator:@me"
+            />
+          </Col>
+        </Row>
+      </>
     );
   };
 
@@ -580,7 +661,7 @@ const Pipelines = () => {
       <PipelineHeader />
       <LoadingSpinner loading={loading}></LoadingSpinner>
       <Accordion alwaysOpen>
-        {pipelines
+        {filteredPipelines
           .sort((a, b) => orderComparePipeline(a, b))
           .map((pipeline) => (
             <Accordion.Item key={`${pipeline.name}_${pipeline.group}`} eventKey={`${pipeline.name}_${pipeline.group}`}>
