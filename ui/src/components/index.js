@@ -39,6 +39,10 @@ export * from './entities/shared';
 export * from './entities/upload';
 // ---------------------------------------------------------
 
+// ----------------------- Omnibar -------------------------
+export { Omnibar, parseQueryString, filtersToQueryString, DEFAULT_FILTER_STATE } from './shared/omnibar';
+// ---------------------------------------------------------
+
 // ------------------------ Images -------------------------
 export { default as FieldBadge } from './shared/field_badge';
 export { default as ImageFields } from './images/image_fields';

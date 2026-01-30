@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Accordion, Alert, Badge, Button, ButtonToolbar, Card, Col, Form, Modal, Row } from 'react-bootstrap';
-import { FaFilter } from 'react-icons/fa';
 
 // project imports
 import {
@@ -20,7 +19,10 @@ import {
   OverlayTipBottom,
   Title,
   Page,
-  SelectInputArray,
+  Omnibar,
+  parseQueryString,
+  filtersToQueryString,
+  DEFAULT_FILTER_STATE,
 } from '@components';
 import { ScalerTypes } from '@components/images/image_fields';
 import { getGroupRole, getThoriumRole, fetchGroups, fetchImages, fetchSingleImage, useAuth } from '@utilities';
@@ -30,10 +32,23 @@ const Images = () => {
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState([]);
   const [groups, setGroups] = useState({});
-  const [filters, setFilters] = useState({ search: '', groups: [], scalers: [], generator: null });
-  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState(DEFAULT_FILTER_STATE);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userInfo, checkCookie } = useAuth();
   let cancelUpdate = false;
+
+  // Get current username for @me expansion
+  const currentUser = userInfo?.username || '';
+
+  // Initialize filters from URL on mount (or when user becomes available for @me expansion)
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      const parsed = parseQueryString(q, currentUser);
+      setFilters(parsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
 
   // need user's group roles to validate permissions to create/edit/delete images
   useEffect(() => {
@@ -63,17 +78,51 @@ const Images = () => {
         const descMatch = image.description?.toLowerCase().includes(searchLower);
         if (!nameMatch && !descMatch) return false;
       }
-      // Group filter
+      // Group inclusion filter
       if (filters.groups.length > 0 && !filters.groups.includes(image.group)) {
         return false;
       }
-      // Scaler filter
+      // Group exclusion filter
+      if (filters.excludeGroups.length > 0 && filters.excludeGroups.includes(image.group)) {
+        return false;
+      }
+      // Scaler inclusion filter
       if (filters.scalers.length > 0 && !filters.scalers.includes(image.scaler)) {
+        return false;
+      }
+      // Scaler exclusion filter
+      if (filters.excludeScalers.length > 0 && filters.excludeScalers.includes(image.scaler)) {
         return false;
       }
       // Generator filter
       if (filters.generator !== null && image.generator !== filters.generator) {
         return false;
+      }
+      // Creator inclusion filter
+      if (filters.creators.length > 0 && !filters.creators.includes(image.creator)) {
+        return false;
+      }
+      // Creator exclusion filter
+      if (filters.excludeCreators.length > 0 && filters.excludeCreators.includes(image.creator)) {
+        return false;
+      }
+      // Used/Orphan filter (based on used_by field)
+      if (filters.used !== null) {
+        const isUsed = image.used_by && image.used_by.length > 0;
+        if (filters.used && !isUsed) return false; // is:used but not used
+        if (!filters.used && isUsed) return false; // is:orphan but is used
+      }
+      // Pipeline inclusion filter (used_by field)
+      if (filters.pipelines.length > 0) {
+        const usedByPipelines = image.used_by || [];
+        const hasMatchingPipeline = filters.pipelines.some((p) => usedByPipelines.includes(p));
+        if (!hasMatchingPipeline) return false;
+      }
+      // Pipeline exclusion filter
+      if (filters.excludePipelines.length > 0) {
+        const usedByPipelines = image.used_by || [];
+        const hasExcludedPipeline = filters.excludePipelines.some((p) => usedByPipelines.includes(p));
+        if (hasExcludedPipeline) return false;
       }
       return true;
     });
@@ -84,15 +133,26 @@ const Images = () => {
     return [...new Set(images.map((img) => img.group))].sort();
   }, [images]);
 
-  const updateFilter = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
+  // Get unique creators from images for filter options
+  const availableCreators = useMemo(() => {
+    return [...new Set(images.map((img) => img.creator).filter(Boolean))].sort();
+  }, [images]);
 
-  const clearFilters = () => {
-    setFilters({ search: '', groups: [], scalers: [], generator: null });
-  };
+  // Get unique pipelines from images for filter options
+  const availablePipelines = useMemo(() => {
+    const pipelines = new Set();
+    images.forEach((img) => {
+      if (img.used_by && Array.isArray(img.used_by)) {
+        img.used_by.forEach((p) => pipelines.add(p));
+      }
+    });
+    return [...pipelines].sort();
+  }, [images]);
 
-  const hasActiveFilters = filters.search || filters.groups.length > 0 || filters.scalers.length > 0 || filters.generator !== null;
+  // Handle filter submission (syncs to URL)
+  const handleFilterSubmit = (newFilters, queryString) => {
+    setSearchParams(queryString ? { q: queryString } : {});
+  };
 
   const CreateImage = () => {
     const navigate = useNavigate();
@@ -135,85 +195,26 @@ const Images = () => {
         </Col>
         <Col className="d-flex justify-content-center">
           <Title>Images</Title>
-          <OverlayTipRight tip={`${showFilters ? 'Hide' : 'Show'} filters`}>
-            <Button variant="" className="mt-3 clear-btn" onClick={() => setShowFilters(!showFilters)}>
-              <FaFilter size="18" color={hasActiveFilters ? '#305ef2' : undefined} />
-            </Button>
-          </OverlayTipRight>
         </Col>
         <Col className="d-flex justify-content-end">
           <CreateImage />
         </Col>
       </Row>
-      {showFilters && (
-        <Card className="panel mb-3">
-          <Row className="mt-3">
-            <Col className="d-flex justify-content-center">
-              <Form.Control
-                type="text"
-                placeholder="Search by name or description..."
-                value={filters.search}
-                onChange={(e) => updateFilter('search', e.target.value)}
-                style={{ maxWidth: '400px' }}
-              />
-            </Col>
-          </Row>
-          <Row className="mt-3">
-            <Col md={6} className="d-flex flex-column align-items-center mb-2">
-              <small className="mb-1">
-                <b>Groups</b>
-              </small>
-              <div style={{ width: '90%' }}>
-                <SelectInputArray
-                  defaultMessage="Filter by group..."
-                  isCreatable={false}
-                  options={availableGroups}
-                  values={filters.groups}
-                  onChange={(newGroups) => updateFilter('groups', newGroups)}
-                />
-              </div>
-            </Col>
-            <Col md={6} className="d-flex flex-column align-items-center mb-2">
-              <small className="mb-1">
-                <b>Scalers</b>
-              </small>
-              <div style={{ width: '90%' }}>
-                <SelectInputArray
-                  defaultMessage="Filter by scaler..."
-                  isCreatable={false}
-                  options={ScalerTypes}
-                  values={filters.scalers}
-                  onChange={(newScalers) => updateFilter('scalers', newScalers)}
-                />
-              </div>
-            </Col>
-          </Row>
-          <Row className="mt-2 mb-3">
-            <Col className="d-flex justify-content-center align-items-center">
-              <small className="me-2">
-                <b>Generator</b>
-              </small>
-              <Form.Select
-                value={filters.generator === null ? '' : filters.generator ? 'yes' : 'no'}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  updateFilter('generator', val === '' ? null : val === 'yes');
-                }}
-                style={{ maxWidth: '100px' }}
-              >
-                <option value="">All</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </Form.Select>
-              {hasActiveFilters && (
-                <Button variant="" className="primary-btn ms-3" onClick={clearFilters}>
-                  Clear
-                </Button>
-              )}
-            </Col>
-          </Row>
-        </Card>
-      )}
+      <Row className="mb-3">
+        <Col>
+          <Omnibar
+            filters={filters}
+            onChange={setFilters}
+            onSubmit={handleFilterSubmit}
+            availableGroups={availableGroups}
+            availableScalers={ScalerTypes}
+            availableCreators={availableCreators}
+            availablePipelines={availablePipelines}
+            currentUser={currentUser}
+            placeholder="Filter images... group:name scaler:K8s creator:@me pipeline:name is:generator"
+          />
+        </Col>
+      </Row>
       <LoadingSpinner loading={loading}></LoadingSpinner>
       <Accordion alwaysOpen>
         {filteredImages.map((image) => (
