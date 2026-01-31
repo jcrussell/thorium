@@ -15,6 +15,15 @@ vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
   tomorrow: {},
 }));
 
+// Mock association graph and tree components to avoid cytoscape/canvas issues in jsdom
+vi.mock('../components/associations/graph/graph', () => ({
+  default: () => null,
+}));
+
+vi.mock('../components/associations/tree', () => ({
+  default: () => null,
+}));
+
 // Start MSW server before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
 

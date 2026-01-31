@@ -1,4 +1,4 @@
-import { UserInfo, UserAuthResponse, RoleKey, Sample, SubmissionChunk, CreateTags, Origin, Tags } from '@models';
+import { UserInfo, UserAuthResponse, RoleKey, Sample, SubmissionChunk, CreateTags, Origin, Tags, Device, Vendor, Entities } from '@models';
 
 let idCounter = 0;
 
@@ -118,5 +118,61 @@ export function createTags(overrides: Partial<CreateTags> = {}): CreateTags {
   return {
     malware: ['trojan', 'ransomware'],
     ...overrides,
+  };
+}
+
+export function createDevice(overrides: Partial<Device> = {}): Device {
+  return {
+    id: overrides.id || generateId(),
+    name: 'Test Device',
+    kind: Entities.Device,
+    description: 'A test device for unit testing',
+    submitter: 'testuser',
+    groups: ['default'],
+    created: new Date().toISOString(),
+    tags: {},
+    metadata: {
+      Device: {
+        urls: ['https://example.com'],
+        vendors: [],
+        critical_system: false,
+        sensitive_location: false,
+        critical_sectors: [],
+      },
+    },
+    ...overrides,
+  };
+}
+
+export function createVendor(overrides: Partial<Vendor> = {}): Vendor {
+  return {
+    id: overrides.id || generateId(),
+    name: 'Test Vendor',
+    kind: Entities.Vendor,
+    description: 'A test vendor for unit testing',
+    submitter: 'testuser',
+    groups: ['default'],
+    created: new Date().toISOString(),
+    tags: {},
+    metadata: {
+      Vendor: {
+        countries: [{ code: 'US', name: 'United States of America' }],
+        critical_sectors: [],
+      },
+    },
+    ...overrides,
+  };
+}
+
+export function createEntityListResponse(count = 3, cursor: string | null = null) {
+  const entities = Array.from({ length: count }, (_, i) =>
+    createDevice({
+      id: `entity-${String(i).padStart(8, '0')}`,
+      name: `Device ${i}`,
+    }),
+  );
+  return {
+    data: entities,
+    cursor: cursor,
   };
 }
