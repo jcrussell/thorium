@@ -3,6 +3,18 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 
+// Mock react-syntax-highlighter to avoid ES module issues
+vi.mock('react-syntax-highlighter', () => ({
+  default: ({ children }: { children: string }) => children,
+  Prism: ({ children }: { children: string }) => children,
+  Light: ({ children }: { children: string }) => children,
+}));
+
+vi.mock('react-syntax-highlighter/dist/esm/styles/prism', () => ({
+  vscDarkPlus: {},
+  tomorrow: {},
+}));
+
 // Start MSW server before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
 
