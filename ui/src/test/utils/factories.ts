@@ -1,4 +1,4 @@
-import { UserInfo, UserAuthResponse, RoleKey } from '@models';
+import { UserInfo, UserAuthResponse, RoleKey, Sample, SubmissionChunk, CreateTags, Origin, Tags } from '@models';
 
 let idCounter = 0;
 
@@ -73,6 +73,50 @@ export function createSample(overrides: Partial<MockSample> = {}): MockSample {
     filename: 'test-file.exe',
     size: 1024,
     submitted: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+export function createSubmissionChunk(overrides: Partial<SubmissionChunk> = {}): SubmissionChunk {
+  return {
+    id: generateId(),
+    name: 'test-sample.exe',
+    description: 'Test submission description',
+    groups: ['default'],
+    submitter: 'testuser',
+    uploaded: new Date().toISOString(),
+    origin: { None: 'None' } as Origin,
+    ...overrides,
+  };
+}
+
+export function createFullSample(overrides: Partial<Sample> = {}): Sample {
+  return {
+    sha256: 'abcd1234'.repeat(8),
+    sha1: 'ef567890'.repeat(5),
+    md5: '12345678'.repeat(4),
+    tags: {} as Tags,
+    submissions: [createSubmissionChunk()],
+    comments: [],
+    ...overrides,
+  };
+}
+
+export function createFileListResponse(count = 3, cursor: string | null = null) {
+  const files = Array.from({ length: count }, (_, i) =>
+    createFullSample({
+      sha256: `${'abcd1234'.repeat(7)}${String(i).padStart(8, '0')}`,
+    }),
+  );
+  return {
+    data: files,
+    cursor: cursor,
+  };
+}
+
+export function createTags(overrides: Partial<CreateTags> = {}): CreateTags {
+  return {
+    malware: ['trojan', 'ransomware'],
     ...overrides,
   };
 }

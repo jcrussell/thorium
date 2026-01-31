@@ -15,9 +15,7 @@ describe('SelectInput', () => {
   it('renders with initial value', async () => {
     const onChange = vi.fn();
 
-    render(
-      <SelectInput onChange={onChange} disabled={false} value="Initial Value" />,
-    );
+    render(<SelectInput onChange={onChange} disabled={false} value="Initial Value" />);
 
     // The value should be displayed in the single value container
     await waitFor(() => {
@@ -29,13 +27,7 @@ describe('SelectInput', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
 
-    render(
-      <SelectInput
-        onChange={onChange}
-        disabled={false}
-        options={['Option A', 'Option B', 'Option C']}
-      />,
-    );
+    render(<SelectInput onChange={onChange} disabled={false} options={['Option A', 'Option B', 'Option C']} />);
 
     // Click to open the dropdown
     const input = screen.getByRole('combobox');
@@ -52,13 +44,7 @@ describe('SelectInput', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
 
-    render(
-      <SelectInput
-        onChange={onChange}
-        disabled={false}
-        options={['Option A', 'Option B']}
-      />,
-    );
+    render(<SelectInput onChange={onChange} disabled={false} options={['Option A', 'Option B']} />);
 
     const input = screen.getByRole('combobox');
     await user.click(input);
@@ -75,9 +61,7 @@ describe('SelectInput', () => {
   it('is disabled when disabled prop is true', () => {
     const onChange = vi.fn();
 
-    const { container } = render(
-      <SelectInput onChange={onChange} disabled={true} />,
-    );
+    const { container } = render(<SelectInput onChange={onChange} disabled={true} />);
 
     // When disabled, react-select sets aria-disabled on the control container
     const control = container.querySelector('[aria-disabled="true"]');
@@ -93,14 +77,7 @@ describe('SelectInput', () => {
     const onChange = vi.fn();
     const onCreate = vi.fn();
 
-    render(
-      <SelectInput
-        onChange={onChange}
-        onCreate={onCreate}
-        disabled={false}
-        options={['Existing']}
-      />,
-    );
+    render(<SelectInput onChange={onChange} onCreate={onCreate} disabled={false} options={['Existing']} />);
 
     const input = screen.getByRole('combobox');
     await user.click(input);
@@ -118,13 +95,7 @@ describe('SelectInput', () => {
   it('renders with provided className', () => {
     const onChange = vi.fn();
 
-    const { container } = render(
-      <SelectInput
-        onChange={onChange}
-        disabled={false}
-        className="custom-class"
-      />,
-    );
+    const { container } = render(<SelectInput onChange={onChange} disabled={false} className="custom-class" />);
 
     expect(container.querySelector('.custom-class')).toBeInTheDocument();
   });

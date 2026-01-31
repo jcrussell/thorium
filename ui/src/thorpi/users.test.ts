@@ -24,10 +24,7 @@ describe('users API', () => {
       // Override with a handler that returns an error
       server.use(
         http.post('**/users/auth', () => {
-          return HttpResponse.json(
-            { error: 'Invalid credentials' },
-            { status: 401 },
-          );
+          return HttpResponse.json({ error: 'Invalid credentials' }, { status: 401 });
         }),
       );
 
@@ -36,9 +33,7 @@ describe('users API', () => {
       const result = await authUserPass('baduser', 'wrongpass', errorHandler);
 
       expect(result).toBeNull();
-      expect(errorHandler).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to Password Auth'),
-      );
+      expect(errorHandler).toHaveBeenCalledWith(expect.stringContaining('Failed to Password Auth'));
     });
   });
 
@@ -76,13 +71,7 @@ describe('users API', () => {
     it('returns auth response on successful user creation', async () => {
       const errorHandler = vi.fn();
 
-      const result = await createUser(
-        'newuser',
-        'newuser@example.com',
-        'password123',
-        'User',
-        errorHandler,
-      );
+      const result = await createUser('newuser', 'newuser@example.com', 'password123', 'User', errorHandler);
 
       expect(result).not.toBeNull();
       expect(result?.token).toBe('test-token-123');
@@ -92,22 +81,13 @@ describe('users API', () => {
     it('calls error handler on creation failure', async () => {
       server.use(
         http.post('**/users/', () => {
-          return HttpResponse.json(
-            { error: 'User already exists' },
-            { status: 400 },
-          );
+          return HttpResponse.json({ error: 'User already exists' }, { status: 400 });
         }),
       );
 
       const errorHandler = vi.fn();
 
-      const result = await createUser(
-        'existinguser',
-        'existing@example.com',
-        'password',
-        'User',
-        errorHandler,
-      );
+      const result = await createUser('existinguser', 'existing@example.com', 'password', 'User', errorHandler);
 
       expect(result).toBeNull();
       expect(errorHandler).toHaveBeenCalled();

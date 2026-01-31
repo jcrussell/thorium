@@ -26,10 +26,7 @@ function createMemoryRouterWrapper(route: string) {
   };
 }
 
-export function renderWithProviders(
-  ui: ReactElement,
-  { route = '/', useMemoryRouter = false, ...options }: CustomRenderOptions = {},
-) {
+export function renderWithProviders(ui: ReactElement, { route = '/', useMemoryRouter = false, ...options }: CustomRenderOptions = {}) {
   const Wrapper = useMemoryRouter ? createMemoryRouterWrapper(route) : AllProviders;
 
   return {
