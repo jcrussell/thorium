@@ -176,3 +176,112 @@ export function createEntityListResponse(count = 3, cursor: string | null = null
     cursor: cursor,
   };
 }
+
+// Reaction factories
+export interface MockReaction {
+  id: string;
+  group: string;
+  pipeline: string;
+  status: string;
+  creator: string;
+  created: string;
+  samples: string[];
+  tags: string[];
+  sla: number;
+  args: Record<string, unknown>;
+}
+
+export function createReaction(overrides: Partial<MockReaction> = {}): MockReaction {
+  return {
+    id: overrides.id || generateId(),
+    group: 'default',
+    pipeline: 'test-pipeline',
+    status: 'Completed',
+    creator: 'testuser',
+    created: new Date().toISOString(),
+    samples: ['abcd1234'.repeat(8)],
+    tags: ['test-sha256'],
+    sla: 30,
+    args: {},
+    ...overrides,
+  };
+}
+
+export function createReactionListResponse(count = 3, cursor: string | null = null, details = false) {
+  if (details) {
+    const reactions = Array.from({ length: count }, (_, i) =>
+      createReaction({
+        id: `reaction-${String(i).padStart(8, '0')}`,
+        pipeline: `pipeline-${i}`,
+      }),
+    );
+    return {
+      details: reactions,
+      cursor: cursor,
+    };
+  }
+  const reactionIds = Array.from({ length: count }, (_, i) => `reaction-${String(i).padStart(8, '0')}`);
+  return {
+    reactions: reactionIds,
+    cursor: cursor,
+  };
+}
+
+export interface MockReactionLogEntry {
+  timestamp: string;
+  action: string;
+  update: Record<string, unknown>;
+}
+
+export function createReactionLogEntry(overrides: Partial<MockReactionLogEntry> = {}): MockReactionLogEntry {
+  return {
+    timestamp: new Date().toISOString(),
+    action: 'JobCreated',
+    update: {
+      id: 'job-123',
+      stage: 'test-stage',
+    },
+    ...overrides,
+  };
+}
+
+export function createReactionLogsResponse(count = 5, cursor: number | null = null) {
+  const logs = Array.from({ length: count }, (_, i) =>
+    createReactionLogEntry({
+      timestamp: new Date(Date.now() - i * 1000).toISOString(),
+      action: i % 2 === 0 ? 'JobCreated' : 'JobCompleted',
+    }),
+  );
+  return logs;
+}
+
+// Search factories
+export interface MockSearchResult {
+  id: string;
+  index: string;
+  highlight: Record<string, string>;
+}
+
+export function createSearchResult(overrides: Partial<MockSearchResult> = {}): MockSearchResult {
+  return {
+    id: `${'abcd1234'.repeat(8)}-default`,
+    index: 'thorium_sample_results',
+    highlight: {
+      data: '@kibana-highlighted-field@test match@/kibana-highlighted-field@',
+    },
+    ...overrides,
+  };
+}
+
+export function createSearchResponse(count = 3, cursor: string | null = null) {
+  const results = Array.from({ length: count }, (_, i) =>
+    createSearchResult({
+      id: `${'abcd1234'.repeat(7)}${String(i).padStart(8, '0')}-group${i}`,
+      index: i % 2 === 0 ? 'thorium_sample_results' : 'thorium_sample_tags',
+    }),
+  );
+  return {
+    data: results,
+    cursor: cursor,
+  };
+}
