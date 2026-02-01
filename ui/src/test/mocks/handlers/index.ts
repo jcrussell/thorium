@@ -4,6 +4,7 @@ import { fileHandlers } from './files';
 import { entityHandlers } from './entities';
 import { reactionHandlers } from './reactions';
 import { searchHandlers } from './search';
+import { groupHandlers } from './groups';
 
 export const handlers = [
   ...userHandlers,
@@ -12,4 +13,5 @@ export const handlers = [
   ...entityHandlers,
   ...reactionHandlers,
   ...searchHandlers,
+  ...groupHandlers,
 ];

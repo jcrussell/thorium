@@ -1,4 +1,4 @@
-import { UserInfo, UserAuthResponse, RoleKey, Sample, SubmissionChunk, CreateTags, Origin, Tags, Device, Vendor, Entities } from '@models';
+import { UserInfo, UserAuthResponse, RoleKey, Sample, SubmissionChunk, CreateTags, Origin, Tags, Device, Vendor, Entities, Group, GroupUsers, GroupAllowed, Stats, ScalerStats, GroupsStats } from '@models';
 
 let idCounter = 0;
 
@@ -13,7 +13,7 @@ export function resetIdCounter(): void {
 export function createUserInfo(overrides: Partial<UserInfo> = {}): UserInfo {
   return {
     username: 'testuser',
-    role: { [RoleKey.User]: 'User' } as UserInfo['role'],
+    role: 'User' as UserInfo['role'],
     email: 'testuser@example.com',
     groups: [],
     token: 'test-token-123',
@@ -30,7 +30,22 @@ export function createUserInfo(overrides: Partial<UserInfo> = {}): UserInfo {
 export function createAdminUser(overrides: Partial<UserInfo> = {}): UserInfo {
   return createUserInfo({
     username: 'admin',
-    role: { [RoleKey.Admin]: 'Admin' } as UserInfo['role'],
+    role: 'Admin' as UserInfo['role'],
+    ...overrides,
+  });
+}
+
+export function createDeveloperUser(overrides: Partial<UserInfo> = {}): UserInfo {
+  return createUserInfo({
+    username: 'developer',
+    role: {
+      Developer: {
+        k8s: true,
+        bare_metal: false,
+        windows: false,
+        external: false,
+      },
+    } as UserInfo['role'],
     ...overrides,
   });
 }
@@ -283,5 +298,103 @@ export function createSearchResponse(count = 3, cursor: string | null = null) {
   return {
     data: results,
     cursor: cursor,
+  };
+}
+
+// Group factories
+export function createGroupUsers(overrides: Partial<GroupUsers> = {}): GroupUsers {
+  return {
+    combined: ['testuser', 'admin'],
+    direct: ['testuser'],
+    metagroups: ['admins'],
+    ...overrides,
+  };
+}
+
+export function createGroupAllowed(overrides: Partial<GroupAllowed> = {}): GroupAllowed {
+  return {
+    files: true,
+    repos: true,
+    tags: true,
+    images: true,
+    pipelines: true,
+    reactions: true,
+    results: true,
+    comments: true,
+    entities: true,
+    ...overrides,
+  };
+}
+
+export function createGroup(overrides: Partial<Group> = {}): Group {
+  return {
+    name: 'default',
+    owners: createGroupUsers({ combined: ['admin'], direct: ['admin'], metagroups: [] }),
+    managers: createGroupUsers({ combined: ['manager'], direct: ['manager'], metagroups: [] }),
+    analysts: ['analyst1'],
+    users: createGroupUsers({ combined: ['testuser'], direct: ['testuser'], metagroups: [] }),
+    monitors: createGroupUsers({ combined: [], direct: [], metagroups: [] }),
+    description: 'Default test group',
+    allowed: createGroupAllowed(),
+    ...overrides,
+  };
+}
+
+// System stats factories
+export function createScalerStats(overrides: Partial<ScalerStats> = {}): ScalerStats {
+  return {
+    deadlines: 5,
+    running: 2,
+    ...overrides,
+  };
+}
+
+export function createStats(overrides: Partial<Stats> = {}): Stats {
+  const defaultGroups: GroupsStats = {
+    default: {
+      pipelines: {
+        'test-pipeline': {
+          stages: {
+            'stage-1': {
+              testuser: {
+                created: 1,
+                running: 2,
+                completed: 10,
+                failed: 1,
+                sleeping: 0,
+                total: 14,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  return {
+    deadlines: 10,
+    running: 3,
+    users: 5,
+    k8s: createScalerStats(),
+    baremetal: createScalerStats({ deadlines: 3, running: 1 }),
+    external: createScalerStats({ deadlines: 2, running: 0 }),
+    groups: defaultGroups,
+    ...overrides,
+  };
+}
+
+// System settings factory
+export interface MockSystemSettings {
+  [key: string]: string | number | boolean;
+}
+
+export function createSystemSettings(overrides: MockSystemSettings = {}): MockSystemSettings {
+  return {
+    version: '1.0.0',
+    environment: 'test',
+    debug: false,
+    max_file_size: 104857600,
+    retention_days: 30,
+    ...overrides,
   };
 }

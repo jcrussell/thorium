@@ -1,9 +1,20 @@
 import { http, HttpResponse } from 'msw';
+import { createStats, createSystemSettings } from '../../utils/factories';
 
 export const systemHandlers = [
   // GET /api/banner
   http.get('**/banner', () => {
     return HttpResponse.json('');
+  }),
+
+  // GET /api/system/stats - System stats
+  http.get('**/system/stats', () => {
+    return HttpResponse.json(createStats());
+  }),
+
+  // GET /api/system/settings - System settings
+  http.get('**/system/settings', () => {
+    return HttpResponse.json(createSystemSettings());
   }),
 
   // GET /api/pipelines/list/:group/ - List pipelines
@@ -31,21 +42,4 @@ export const systemHandlers = [
     });
   }),
 
-  // GET /api/groups/ - List groups
-  http.get('**/groups/', () => {
-    return HttpResponse.json({
-      data: [
-        { name: 'default', owner: 'admin' },
-        { name: 'test-group', owner: 'admin' },
-      ],
-    });
-  }),
-
-  // GET /api/groups/:group/details - Group details
-  http.get('**/groups/:group/details', ({ params }) => {
-    return HttpResponse.json({
-      name: params.group,
-      owner: 'admin',
-    });
-  }),
 ];

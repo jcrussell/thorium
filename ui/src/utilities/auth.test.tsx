@@ -207,4 +207,69 @@ describe('useAuth hook', () => {
     expect(authContext).not.toBeNull();
     expect(typeof authContext!.refreshUserInfo).toBe('function');
   });
+
+  it('logout clears user state', async () => {
+    setMockCookie('THORIUM_TOKEN', 'test-token-123');
+
+    let authContext: ReturnType<typeof useAuth> | null = null;
+
+    function CaptureAuth() {
+      authContext = useAuth();
+      return (
+        <div>
+          <span data-testid="username">{authContext.userInfo?.username ?? 'not-logged-in'}</span>
+        </div>
+      );
+    }
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <CaptureAuth />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+
+    // Wait for user info to be fetched
+    await waitFor(() => {
+      expect(screen.getByTestId('username')).toHaveTextContent('testuser');
+    });
+
+    // Logout
+    await authContext!.logout();
+
+    // User should be cleared
+    await waitFor(() => {
+      expect(screen.getByTestId('username')).toHaveTextContent('not-logged-in');
+    });
+  });
+});
+
+describe('Role-based access', () => {
+  beforeEach(() => {
+    clearMockCookie();
+  });
+
+  it('user info includes role information', async () => {
+    setMockCookie('THORIUM_TOKEN', 'test-token-123');
+
+    let authContext: ReturnType<typeof useAuth> | null = null;
+
+    function CaptureAuth() {
+      authContext = useAuth();
+      return <div data-testid="role">{authContext.userInfo?.role ? 'has-role' : 'no-role'}</div>;
+    }
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <CaptureAuth />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('role')).toHaveTextContent('has-role');
+    });
+  });
 });
