@@ -190,10 +190,16 @@ const Omnibar: React.FC<OmnibarProps> = ({
         e.preventDefault();
         if (showSuggestions && suggestions.length > 0 && suggestions[selectedSuggestionIndex]) {
           // If suggestions are visible and one is selected, apply it
-          handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
+          const suggestion = suggestions[selectedSuggestionIndex];
+          handleSelectSuggestion(suggestion);
+          // If it's a complete filter (not just a key), clear the input
+          if (suggestion.type !== 'key') {
+            setInputValue('');
+          }
         } else {
-          // Otherwise, submit the current filters
+          // Otherwise, submit the current filters and clear input
           setShowSuggestions(false);
+          setInputValue('');
           onSubmit(filters, filtersToQueryString(filters));
         }
         break;
