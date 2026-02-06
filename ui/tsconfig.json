@@ -20,6 +20,7 @@
     "esModuleInterop": true,
     "paths": {
       "@components": ["components/index.js"],
+      "@hooks": ["hooks/index.ts"],
       "@models": ["models/index.ts"],
       "@thorpi": ["thorpi/index.js"],
       "@styles": ["styles/index.ts"],

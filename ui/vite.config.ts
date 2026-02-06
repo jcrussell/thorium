@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
         "@assets": fileURLToPath(new URL("./src/assets", import.meta.url)),
         "@client": fileURLToPath(new URL("./src/client", import.meta.url)),
         "@components": fileURLToPath(new URL("./src/components", import.meta.url)),
+        "@hooks": fileURLToPath(new URL("./src/hooks", import.meta.url)),
         "@models": fileURLToPath(new URL("./src/models", import.meta.url)),
         "@pages": fileURLToPath(new URL("./src/pages", import.meta.url)),
         "@styles": fileURLToPath(new URL("./src/styles", import.meta.url)),

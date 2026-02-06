@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Accordion, Alert, Badge, Button, ButtonToolbar, ButtonGroup, Col, Form, Modal, Row } from 'react-bootstrap';
 import { FaQuestionCircle } from 'react-icons/fa';
@@ -20,7 +20,8 @@ import {
   parseQueryString,
   DEFAULT_FILTER_STATE,
 } from '@components';
-import { getGroupRole, getThoriumRole, fetchGroups, useAuth } from '@utilities';
+import { useFilteredList } from '@hooks';
+import { getGroupRole, getThoriumRole, fetchGroups, useAuth, matchesPipelineFilters } from '@utilities';
 import { createPipeline, deletePipeline, listPipelines, updatePipeline } from '@thorpi';
 
 const Pipelines = () => {
@@ -71,35 +72,11 @@ const Pipelines = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
 
-  // Filter pipelines based on current filters
-  const filteredPipelines = useMemo(() => {
-    return pipelines.filter((pipeline) => {
-      // Search filter - matches name or description
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const nameMatch = pipeline.name?.toLowerCase().includes(searchLower);
-        const descMatch = pipeline.description?.toLowerCase().includes(searchLower);
-        if (!nameMatch && !descMatch) return false;
-      }
-      // Group inclusion filter
-      if (filters.groups.length > 0 && !filters.groups.includes(pipeline.group)) {
-        return false;
-      }
-      // Group exclusion filter
-      if (filters.excludeGroups.length > 0 && filters.excludeGroups.includes(pipeline.group)) {
-        return false;
-      }
-      // Creator inclusion filter
-      if (filters.creators.length > 0 && !filters.creators.includes(pipeline.creator)) {
-        return false;
-      }
-      // Creator exclusion filter
-      if (filters.excludeCreators.length > 0 && filters.excludeCreators.includes(pipeline.creator)) {
-        return false;
-      }
-      return true;
-    });
-  }, [pipelines, filters]);
+  // Stable filter function reference for the hook
+  const pipelineFilterFn = useCallback((pipeline, filterState) => matchesPipelineFilters(pipeline, filterState), []);
+
+  // Filter pipelines based on current filters using shared hook
+  const filteredPipelines = useFilteredList(pipelines, filters, pipelineFilterFn);
 
   // Get unique groups from pipelines for filter options
   const availableGroups = useMemo(() => {

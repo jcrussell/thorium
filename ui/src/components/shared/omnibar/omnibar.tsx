@@ -483,6 +483,9 @@ const Omnibar: React.FC<OmnibarProps> = ({
   );
 };
 
-export default Omnibar;
-export { Omnibar, filtersToQueryString, parseQueryString };
+// Memoize the Omnibar component to prevent unnecessary re-renders
+const MemoizedOmnibar = React.memo(Omnibar);
+
+export default MemoizedOmnibar;
+export { MemoizedOmnibar as Omnibar, filtersToQueryString, parseQueryString };
 export type { FilterState, OmnibarProps };

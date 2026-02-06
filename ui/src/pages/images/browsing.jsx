@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Accordion, Alert, Badge, Button, ButtonToolbar, Card, Col, Form, Modal, Row } from 'react-bootstrap';
 
@@ -25,7 +25,8 @@ import {
   DEFAULT_FILTER_STATE,
 } from '@components';
 import { ScalerTypes } from '@components/images/image_fields';
-import { getGroupRole, getThoriumRole, fetchGroups, fetchImages, fetchSingleImage, useAuth } from '@utilities';
+import { useFilteredList } from '@hooks';
+import { getGroupRole, getThoriumRole, fetchGroups, fetchImages, fetchSingleImage, useAuth, matchesImageFilters } from '@utilities';
 import { deleteImage, updateImage } from '@thorpi';
 
 const Images = () => {
@@ -68,65 +69,11 @@ const Images = () => {
     };
   }, [groups]);
 
-  // Filter images based on current filters
-  const filteredImages = useMemo(() => {
-    return images.filter((image) => {
-      // Search filter - matches name or description
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const nameMatch = image.name?.toLowerCase().includes(searchLower);
-        const descMatch = image.description?.toLowerCase().includes(searchLower);
-        if (!nameMatch && !descMatch) return false;
-      }
-      // Group inclusion filter
-      if (filters.groups.length > 0 && !filters.groups.includes(image.group)) {
-        return false;
-      }
-      // Group exclusion filter
-      if (filters.excludeGroups.length > 0 && filters.excludeGroups.includes(image.group)) {
-        return false;
-      }
-      // Scaler inclusion filter
-      if (filters.scalers.length > 0 && !filters.scalers.includes(image.scaler)) {
-        return false;
-      }
-      // Scaler exclusion filter
-      if (filters.excludeScalers.length > 0 && filters.excludeScalers.includes(image.scaler)) {
-        return false;
-      }
-      // Generator filter
-      if (filters.generator !== null && image.generator !== filters.generator) {
-        return false;
-      }
-      // Creator inclusion filter
-      if (filters.creators.length > 0 && !filters.creators.includes(image.creator)) {
-        return false;
-      }
-      // Creator exclusion filter
-      if (filters.excludeCreators.length > 0 && filters.excludeCreators.includes(image.creator)) {
-        return false;
-      }
-      // Used/Orphan filter (based on used_by field)
-      if (filters.used !== null) {
-        const isUsed = image.used_by && image.used_by.length > 0;
-        if (filters.used && !isUsed) return false; // is:used but not used
-        if (!filters.used && isUsed) return false; // is:orphan but is used
-      }
-      // Pipeline inclusion filter (used_by field)
-      if (filters.pipelines.length > 0) {
-        const usedByPipelines = image.used_by || [];
-        const hasMatchingPipeline = filters.pipelines.some((p) => usedByPipelines.includes(p));
-        if (!hasMatchingPipeline) return false;
-      }
-      // Pipeline exclusion filter
-      if (filters.excludePipelines.length > 0) {
-        const usedByPipelines = image.used_by || [];
-        const hasExcludedPipeline = filters.excludePipelines.some((p) => usedByPipelines.includes(p));
-        if (hasExcludedPipeline) return false;
-      }
-      return true;
-    });
-  }, [images, filters]);
+  // Stable filter function reference for the hook
+  const imageFilterFn = useCallback((image, filterState) => matchesImageFilters(image, filterState), []);
+
+  // Filter images based on current filters using shared hook
+  const filteredImages = useFilteredList(images, filters, imageFilterFn);
 
   // Get unique groups from images for filter options
   const availableGroups = useMemo(() => {

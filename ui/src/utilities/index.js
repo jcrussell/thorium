@@ -1,6 +1,7 @@
 export { useAuth, RequireAuth, RequireAdmin, AuthProvider } from './auth';
 export * from './fetch';
 export * from './files';
+export * from './filterPredicates';
 export * from './groups';
 export * from './inputs';
 export * from './interactions';
