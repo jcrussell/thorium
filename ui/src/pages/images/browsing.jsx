@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Accordion, Alert, Badge, Button, ButtonToolbar, Card, Col, Form, Modal, Row } from 'react-bootstrap';
+import { Accordion, Alert, Badge, Button, ButtonToolbar, Col, Form, Modal, Row } from 'react-bootstrap';
 
 // project imports
 import {
@@ -41,15 +41,17 @@ const Images = () => {
   // Get current username for @me expansion
   const currentUser = userInfo?.username || '';
 
-  // Initialize filters from URL on mount (or when user becomes available for @me expansion)
+  // Sync URL query parameter to filters when URL changes
   useEffect(() => {
     const q = searchParams.get('q');
     if (q) {
       const parsed = parseQueryString(q, currentUser);
       setFilters(parsed);
+    } else {
+      // Clear filters if query param is removed
+      setFilters(DEFAULT_FILTER_STATE);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
+  }, [searchParams, currentUser]);
 
   // need user's group roles to validate permissions to create/edit/delete images
   useEffect(() => {
@@ -97,8 +99,9 @@ const Images = () => {
   }, [images]);
 
   // Handle filter submission (syncs to URL)
+  // Use replace:true to avoid excessive browser history entries from filter changes
   const handleFilterSubmit = (newFilters, queryString) => {
-    setSearchParams(queryString ? { q: queryString } : {});
+    setSearchParams(queryString ? { q: queryString } : {}, { replace: true });
   };
 
   const CreateImage = () => {
@@ -159,6 +162,7 @@ const Images = () => {
             availablePipelines={availablePipelines}
             currentUser={currentUser}
             placeholder="Filter images... group:name scaler:K8s creator:@me pipeline:name is:generator"
+            ariaLabel="Filter images"
           />
         </Col>
       </Row>

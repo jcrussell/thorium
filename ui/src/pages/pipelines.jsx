@@ -35,15 +35,17 @@ const Pipelines = () => {
   // Get current username for @me expansion
   const currentUser = userInfo?.username || '';
 
-  // Initialize filters from URL on mount (or when user becomes available for @me expansion)
+  // Sync URL query parameter to filters when URL changes
   useEffect(() => {
     const q = searchParams.get('q');
     if (q) {
       const parsed = parseQueryString(q, currentUser);
       setFilters(parsed);
+    } else {
+      // Clear filters if query param is removed
+      setFilters(DEFAULT_FILTER_STATE);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
+  }, [searchParams, currentUser]);
 
   // get detailed pipeline info for pipelines in each group
   const fetchPipelines = async () => {
@@ -89,8 +91,9 @@ const Pipelines = () => {
   }, [pipelines]);
 
   // Handle filter submission (syncs to URL)
+  // Use replace:true to avoid excessive browser history entries from filter changes
   const handleFilterSubmit = (newFilters, queryString) => {
-    setSearchParams(queryString ? { q: queryString } : {});
+    setSearchParams(queryString ? { q: queryString } : {}, { replace: true });
   };
 
   /**
@@ -220,6 +223,7 @@ const Pipelines = () => {
               availablePipelines={[]}
               currentUser={currentUser}
               placeholder="Filter pipelines... group:name creator:@me"
+              ariaLabel="Filter pipelines"
             />
           </Col>
         </Row>

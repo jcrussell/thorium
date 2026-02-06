@@ -91,7 +91,7 @@ const OmnibarSuggestions: React.FC<OmnibarSuggestionsProps> = ({ suggestions, se
   }
 
   return (
-    <DropdownContainer $visible={visible} ref={containerRef}>
+    <DropdownContainer $visible={visible} ref={containerRef} role="listbox" aria-label="Filter suggestions">
       {suggestions.map((suggestion, index) => (
         <SuggestionItem
           key={`${suggestion.value}-${index}`}
@@ -100,6 +100,9 @@ const OmnibarSuggestions: React.FC<OmnibarSuggestionsProps> = ({ suggestions, se
           ref={index === selectedIndex ? selectedRef : undefined}
           onClick={() => onSelect(suggestion)}
           onMouseDown={(e) => e.preventDefault()} // Prevent input blur
+          role="option"
+          aria-selected={index === selectedIndex}
+          tabIndex={-1}
         >
           {suggestion.type === 'key' && <KeyIcon>:</KeyIcon>}
           <SuggestionLabel>{suggestion.display}</SuggestionLabel>

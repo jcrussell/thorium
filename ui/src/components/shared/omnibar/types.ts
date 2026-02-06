@@ -44,6 +44,7 @@ export interface OmnibarProps {
   availablePipelines?: string[];
   currentUser?: string; // For @me shorthand expansion
   placeholder?: string;
+  ariaLabel?: string; // Accessible label for the filter input
 }
 
 /** Props for the badge component */
@@ -64,6 +65,16 @@ export interface OmnibarSuggestionsProps {
 
 /** Filter key definitions for autocomplete */
 export const FILTER_KEYS = ['group', 'scaler', 'creator', 'pipeline', 'is'] as const;
+
+/** Configuration constants for omnibar behavior */
+export const OMNIBAR_CONFIG = {
+  /** Maximum number of suggestions to display */
+  MAX_SUGGESTIONS: 10,
+  /** Debounce delay (ms) for filter parsing during typing */
+  FILTER_DEBOUNCE_MS: 300,
+  /** Delay (ms) before hiding suggestions on blur to allow click events */
+  BLUR_DELAY_MS: 150,
+} as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
 
 /** Default/empty filter state */

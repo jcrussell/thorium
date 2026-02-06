@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { FilterState, ParsedToken, Suggestion, FILTER_KEYS, DEFAULT_FILTER_STATE } from './types';
+import { FilterState, ParsedToken, Suggestion, FILTER_KEYS, OMNIBAR_CONFIG } from './types';
 
 /**
  * Regex pattern to match filter tokens
@@ -13,15 +13,13 @@ const TOKEN_PATTERN = /(-?)(\w+):("[^"]*"|[^\s]+)/g;
 
 /**
  * Parse raw input string into tokens
+ * Uses matchAll() to avoid shared regex state mutation issues
  */
 export function parseInput(input: string): ParsedToken[] {
   const tokens: ParsedToken[] = [];
-  let match: RegExpExecArray | null;
 
-  // Reset regex state
-  TOKEN_PATTERN.lastIndex = 0;
-
-  while ((match = TOKEN_PATTERN.exec(input)) !== null) {
+  // Use matchAll() to avoid lastIndex state mutation issues with the global regex
+  for (const match of input.matchAll(TOKEN_PATTERN)) {
     const negated = match[1] === '-';
     const key = match[2].toLowerCase();
     let value = match[3];
@@ -57,29 +55,39 @@ export function extractFreeText(input: string): string {
  * @param currentUser - Current username for @me expansion
  */
 export function tokensToFilters(tokens: ParsedToken[], freeText: string, currentUser: string = ''): FilterState {
-  const filters: FilterState = { ...DEFAULT_FILTER_STATE, search: freeText };
+  // Use Sets to collect values and automatically deduplicate
+  const groups = new Set<string>();
+  const excludeGroups = new Set<string>();
+  const scalers = new Set<string>();
+  const excludeScalers = new Set<string>();
+  const creators = new Set<string>();
+  const excludeCreators = new Set<string>();
+  const pipelines = new Set<string>();
+  const excludePipelines = new Set<string>();
+  let generator: boolean | null = null;
+  let used: boolean | null = null;
 
   for (const token of tokens) {
     switch (token.key) {
       case 'group':
         if (token.negated) {
-          filters.excludeGroups = [...filters.excludeGroups, token.value];
+          excludeGroups.add(token.value);
         } else {
-          filters.groups = [...filters.groups, token.value];
+          groups.add(token.value);
         }
         break;
 
       case 'scaler':
         if (token.negated) {
-          filters.excludeScalers = [...filters.excludeScalers, token.value];
+          excludeScalers.add(token.value);
         } else {
-          filters.scalers = [...filters.scalers, token.value];
+          scalers.add(token.value);
         }
         break;
 
       case 'is':
         if (token.value.toLowerCase() === 'generator') {
-          filters.generator = !token.negated;
+          generator = !token.negated;
         }
         break;
 
@@ -88,9 +96,9 @@ export function tokensToFilters(tokens: ParsedToken[], freeText: string, current
         const isYes = ['yes', 'true', '1'].includes(token.value.toLowerCase());
         const isNo = ['no', 'false', '0'].includes(token.value.toLowerCase());
         if (isYes) {
-          filters.generator = !token.negated;
+          generator = !token.negated;
         } else if (isNo) {
-          filters.generator = token.negated;
+          generator = token.negated;
         }
         break;
       }
@@ -99,18 +107,18 @@ export function tokensToFilters(tokens: ParsedToken[], freeText: string, current
         // Expand @me to current user
         const creatorValue = token.value === '@me' && currentUser ? currentUser : token.value;
         if (token.negated) {
-          filters.excludeCreators = [...filters.excludeCreators, creatorValue];
+          excludeCreators.add(creatorValue);
         } else {
-          filters.creators = [...filters.creators, creatorValue];
+          creators.add(creatorValue);
         }
         break;
       }
 
       case 'pipeline':
         if (token.negated) {
-          filters.excludePipelines = [...filters.excludePipelines, token.value];
+          excludePipelines.add(token.value);
         } else {
-          filters.pipelines = [...filters.pipelines, token.value];
+          pipelines.add(token.value);
         }
         break;
     }
@@ -119,15 +127,27 @@ export function tokensToFilters(tokens: ParsedToken[], freeText: string, current
     if (token.key === 'is') {
       const val = token.value.toLowerCase();
       if (val === 'used') {
-        filters.used = !token.negated;
+        used = !token.negated;
       } else if (val === 'orphan') {
         // is:orphan means NOT used by any pipeline
-        filters.used = token.negated; // is:orphan = used:false, -is:orphan = used:true
+        used = token.negated; // is:orphan = used:false, -is:orphan = used:true
       }
     }
   }
 
-  return filters;
+  return {
+    search: freeText,
+    groups: [...groups],
+    excludeGroups: [...excludeGroups],
+    scalers: [...scalers],
+    excludeScalers: [...excludeScalers],
+    generator,
+    creators: [...creators],
+    excludeCreators: [...excludeCreators],
+    used,
+    pipelines: [...pipelines],
+    excludePipelines: [...excludePipelines],
+  };
 }
 
 /**
@@ -365,7 +385,7 @@ export function useOmnibarParser(
         }
       }
 
-      return suggestions.slice(0, 10); // Limit to 10 suggestions
+      return suggestions.slice(0, OMNIBAR_CONFIG.MAX_SUGGESTIONS);
     },
     [availableGroups, availableScalers, availableCreators, availablePipelines, currentUser],
   );

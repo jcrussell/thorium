@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react';
 import styled from 'styled-components';
 import { FaTimes, FaSearch } from 'react-icons/fa';
-import { OmnibarProps, FilterState, Suggestion, DEFAULT_FILTER_STATE } from './types';
-import { useOmnibarParser, filtersToQueryString, parseQueryString } from './use_omnibar_parser';
+import { OmnibarProps, FilterState, Suggestion, DEFAULT_FILTER_STATE, OMNIBAR_CONFIG } from './types';
+import { useOmnibarParser, filtersToQueryString } from './use_omnibar_parser';
 import OmnibarBadge from './omnibar_badge';
 import OmnibarSuggestions from './omnibar_suggestions';
 
@@ -101,6 +101,7 @@ const Omnibar: React.FC<OmnibarProps> = ({
   availablePipelines = [],
   currentUser = '',
   placeholder = 'Filter... group:name scaler:K8s creator:@me is:generator',
+  ariaLabel = 'Filter items',
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -149,7 +150,7 @@ const Omnibar: React.FC<OmnibarProps> = ({
   useEffect(() => {
     const timer = setTimeout(() => {
       parseAndUpdateFilters(inputValue);
-    }, 300);
+    }, OMNIBAR_CONFIG.FILTER_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [inputValue, parseAndUpdateFilters]);
 
@@ -363,7 +364,7 @@ const Omnibar: React.FC<OmnibarProps> = ({
     // Delay hiding suggestions to allow click events on suggestions
     setTimeout(() => {
       setShowSuggestions(false);
-    }, 150);
+    }, OMNIBAR_CONFIG.BLUR_DELAY_MS);
   };
 
   return (
@@ -373,7 +374,7 @@ const Omnibar: React.FC<OmnibarProps> = ({
           <FaSearch size={14} />
         </SearchIcon>
 
-        <BadgesContainer>
+        <BadgesContainer aria-label="Active filters" role="list">
           {/* Group badges */}
           {filters.groups.map((group) => (
             <OmnibarBadge key={`group-${group}`} type="group" value={group} onRemove={() => removeFilter('group', group)} />
@@ -460,8 +461,11 @@ const Omnibar: React.FC<OmnibarProps> = ({
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder={hasActiveFilters ? '' : placeholder}
-          aria-label="Filter images"
+          aria-label={ariaLabel}
+          aria-autocomplete="list"
+          aria-expanded={showSuggestions && suggestions.length > 0}
           autoComplete="off"
+          role="combobox"
         />
 
         {(hasActiveFilters || inputValue) && (
@@ -487,5 +491,6 @@ const Omnibar: React.FC<OmnibarProps> = ({
 const MemoizedOmnibar = React.memo(Omnibar);
 
 export default MemoizedOmnibar;
-export { MemoizedOmnibar as Omnibar, filtersToQueryString, parseQueryString };
+export { MemoizedOmnibar as Omnibar, filtersToQueryString };
+export { parseQueryString } from './use_omnibar_parser';
 export type { FilterState, OmnibarProps };

@@ -1,20 +1,6 @@
-/**
- * Filter state interface - matches the omnibar FilterState type.
- * Defined here to avoid circular dependencies between utilities and components.
- */
-export interface FilterState {
-  search: string;
-  groups: string[];
-  excludeGroups: string[];
-  scalers: string[];
-  excludeScalers: string[];
-  generator: boolean | null;
-  creators: string[];
-  excludeCreators: string[];
-  used: boolean | null;
-  pipelines: string[];
-  excludePipelines: string[];
-}
+// Import FilterState from the canonical source to avoid type duplication
+import type { FilterState } from '../components/shared/omnibar/types';
+export type { FilterState };
 
 /**
  * Pure filter predicate for Image objects.
