@@ -21,7 +21,6 @@ import {
   Page,
   Omnibar,
   parseQueryString,
-  filtersToQueryString,
   DEFAULT_FILTER_STATE,
 } from '@components';
 import { ScalerTypes } from '@components/images/image_fields';
