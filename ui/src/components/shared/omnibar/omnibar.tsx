@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
+import React, { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react';
 import styled from 'styled-components';
 import { FaTimes, FaSearch } from 'react-icons/fa';
 import { OmnibarProps, FilterState, Suggestion, DEFAULT_FILTER_STATE } from './types';
@@ -145,6 +145,14 @@ const Omnibar: React.FC<OmnibarProps> = ({
     [parseInput, extractFreeText, tokensToFilters, onChange],
   );
 
+  // Debounce filter parsing to avoid rapid updates during typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      parseAndUpdateFilters(inputValue);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [inputValue, parseAndUpdateFilters]);
+
   /**
    * Handle input change
    */
@@ -153,9 +161,7 @@ const Omnibar: React.FC<OmnibarProps> = ({
     setInputValue(value);
     setShowSuggestions(true);
     setSelectedSuggestionIndex(0);
-
-    // Real-time filter updates
-    parseAndUpdateFilters(value);
+    // Filter parsing is handled by debounced useEffect
   };
 
   /**
