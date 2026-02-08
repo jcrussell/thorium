@@ -138,6 +138,80 @@ impl Allocatable {
         }
     }
 
+    /// Create an allocatable object for testing without requiring a full Cache
+    ///
+    /// This constructor is only available when the `test-utilities` feature is enabled
+    /// and allows creation of Allocatable instances with minimal dependencies.
+    ///
+    /// # Arguments
+    ///
+    /// * `scaler_type` - The type of scheduler being simulated
+    /// * `users` - List of usernames to initialize fair share with
+    /// * `fair_share_weights` - Optional custom fair share weights (uses defaults if None)
+    /// * `conf` - Configuration to use (pass from test setup)
+    #[cfg(feature = "test-utilities")]
+    pub fn new_for_test(
+        scaler_type: ImageScaler,
+        users: Vec<String>,
+        fair_share_weights: Option<FairShareWeights>,
+        conf: Conf,
+    ) -> Self {
+        // start all users at 0 for fair share
+        let mut starter_set = HashSet::default();
+        for username in users {
+            starter_set.insert(username);
+        }
+
+        // add our fair share starter set at 0
+        let mut fair_share = BTreeMap::default();
+        fair_share.insert(0, starter_set);
+
+        // build a new allocatable object
+        Allocatable {
+            conf,
+            scaler_type,
+            deadline_window: 3600,
+            bans: BanSets::new(scaler_type),
+            fairshare_pool: Pool::default(),
+            deadlines_pool: Pool::default(),
+            restrictions: WorkerRestrictions::default(),
+            clusters: BTreeMap::default(),
+            low_resources: false,
+            fair_share,
+            weights: fair_share_weights.unwrap_or_default(),
+            counts: HashMap::default(),
+            image_counts: HashMap::default(),
+            fair_share_counts: HashMap::default(),
+            spawn_limit: 100,
+            changes: ReqMap::default(),
+        }
+    }
+
+    /// Create an allocatable with pre-set fair share ranks for testing
+    #[cfg(feature = "test-utilities")]
+    pub fn new_for_test_with_ranks(
+        scaler_type: ImageScaler,
+        user_ranks: Vec<(String, u64)>,
+        conf: Conf,
+    ) -> Self {
+        let mut allocatable = Self::new_for_test(scaler_type, vec![], None, conf);
+
+        // Clear the default fair share and set up custom ranks
+        allocatable.fair_share.clear();
+        for (user, rank) in user_ranks {
+            let rank_set = allocatable.fair_share.entry(rank).or_default();
+            rank_set.insert(user);
+        }
+
+        allocatable
+    }
+
+    /// Get a reference to the configuration
+    #[cfg(feature = "test-utilities")]
+    pub fn conf(&self) -> &Conf {
+        &self.conf
+    }
+
     /// Remove and return the cpu group and cluster info for a specfic cluster
     ///
     /// # Arguments
@@ -741,6 +815,415 @@ impl Allocatable {
             }
         }
         Ok(())
+    }
+
+    // ========================================================================
+    // Testable Pure-Logic Methods
+    // ========================================================================
+    // These methods extract the pure scheduling logic from their async counterparts,
+    // accepting pre-fetched data instead of calling the Thorium API. This enables
+    // deterministic testing of scheduling behavior without network dependencies.
+
+    /// Testable version of fairshare_allocation that takes stats directly
+    ///
+    /// This method contains the pure scheduling logic from `fairshare_allocation`,
+    /// accepting pre-fetched `SystemStats` instead of calling the Thorium API.
+    /// Use this for unit testing and simulation.
+    ///
+    /// # Arguments
+    ///
+    /// * `stats` - The system stats containing user job information
+    /// * `cache` - A cache of info from Thorium to use when scheduling
+    /// * `spawn_slots` - The remaining spawn slots to fill
+    #[cfg(feature = "test-utilities")]
+    pub fn fairshare_allocation_with_stats(
+        &mut self,
+        stats: &thorium::models::SystemStats,
+        cache: &Cache,
+        spawn_slots: &mut usize,
+    ) {
+        // Build a map of each users outstanding job reqs
+        let mut map = stats.users_jobs();
+        // track the users that do not spawn any jobs
+        let mut no_spawns = BTreeMap::default();
+        // iterate over our users based on how many resources they have consumed
+        while let Some((rank, users)) = self.fair_share.pop_first() {
+            // get an entry to the current rank group in our no spawn map
+            let entry = no_spawns.entry(rank).or_default();
+            // try to spawn a job for each of the users in this rank group
+            self.try_fair_share_spawn(cache, spawn_slots, &mut map, rank, users, entry);
+        }
+        // add the users who did not spawn anything back into our fair share tree
+        for (rank, users) in no_spawns {
+            // get an entry to this rank group
+            let rank_entry = self.fair_share.entry(rank).or_default();
+            // add our users to this rank group
+            rank_entry.extend(users);
+        }
+    }
+
+    /// Testable version of deadline_allocation that takes deadlines directly
+    ///
+    /// This method contains the pure scheduling logic from `deadline_allocation`,
+    /// accepting a pre-fetched and filtered list of deadlines instead of calling
+    /// the Thorium API. Use this for unit testing and simulation.
+    ///
+    /// # Arguments
+    ///
+    /// * `deadlines` - The deadlines to try to meet (should already be filtered)
+    /// * `cache` - A cache of info from Thorium to use when scheduling
+    /// * `spawn_slots` - The remaining spawn slots to fill
+    #[cfg(feature = "test-utilities")]
+    pub fn deadline_allocation_with_deadlines(
+        &mut self,
+        deadlines: Vec<thorium::models::Deadline>,
+        cache: &Cache,
+        spawn_slots: &mut usize,
+    ) {
+        // get our current span
+        let span = Span::current();
+        // crawl over these deadlines and try to meet them
+        for deadline in deadlines {
+            // get this deadlines timestamp
+            let timestamp = deadline.deadline;
+            // build a requisition for this deadline
+            let req = Requisition::from(deadline);
+            // check if we spawned this image in the past
+            if let Some(count) = self.counts.get_mut(&req) {
+                // if we spawned this in the past then we should skip this spawn
+                // otherwise we will repeatedly spawn workers for the same deadlines
+                match count.cmp(&&mut 0) {
+                    // we spawned a worker for this deadline in the past
+                    Ordering::Greater => {
+                        // decrement our count
+                        *count -= 1;
+                        // skip this deadline
+                        continue;
+                    }
+                    // we have no longer spawned a worker to meet this deadline
+                    _ => {
+                        self.counts.remove(&req);
+                    }
+                }
+            }
+            // check if we are already trying to meet this request
+            if let Some(current) = self.fair_share_counts.get_mut(&req) {
+                // decrement our current count
+                *current = current.saturating_sub(1);
+                // if current is 0 then remove it
+                if *current == 0 {
+                    // remove this req from our fair share counts since we have consumed them all
+                    self.fair_share_counts.remove(&req);
+                }
+                continue;
+            }
+            // get this jobs image info
+            let Some(image) = cache.get_image(&req.group, &req.stage, &span) else {
+                continue;
+            };
+            // try to allocate resources for this deadline
+            if let Some((cluster, node)) = self.try_allocate(image, Pools::Deadline) {
+                // build our newly spawned worker
+                let spawned = Spawned::new(&cluster, &node, req.clone(), image, Pools::Deadline);
+                // get an entry to this clusters map in our change map
+                let cluster_entry = self.changes.spawns.entry(cluster).or_default();
+                // get an entry to the deadline group for this spawn
+                let spawns_entry = cluster_entry.entry(timestamp).or_default();
+                // add this new worker allocation to our change map
+                spawns_entry.push(spawned);
+            } else {
+                // we would like to spawn this image but can't so check if we are low on resources
+                // and out of spawn slots
+                if self.low_resources && *spawn_slots > 0 {
+                    // try to find something to scale down to meet this deadline
+                    if self.scale_down_to_meet(timestamp, &req, image) {
+                        // consume a spawn slot
+                        *spawn_slots -= 1;
+                    }
+                }
+            }
+            // if we have exhausted our spawn slots then exit early
+            if *spawn_slots == 0 {
+                break;
+            }
+        }
+    }
+
+    /// Testable version of the full allocation cycle
+    ///
+    /// This method runs a complete allocation cycle using pre-fetched data,
+    /// enabling deterministic simulation and testing of the scheduler.
+    ///
+    /// # Arguments
+    ///
+    /// * `stats` - The system stats containing user job information
+    /// * `deadlines` - The deadlines to try to meet (should already be filtered)
+    /// * `cache` - A cache of info from Thorium to use when scheduling
+    #[cfg(feature = "test-utilities")]
+    pub fn allocate_with_data(
+        &mut self,
+        stats: &thorium::models::SystemStats,
+        deadlines: Vec<thorium::models::Deadline>,
+        cache: &Cache,
+    ) {
+        // log our clusters current resources
+        self.log_resources();
+        // check if any of our cluster is under high load
+        self.mark_high_load();
+        // empty our req map
+        self.changes.spawns.clear();
+        self.changes.scale_down.clear();
+        // reset our nodes spawn slot count
+        self.reset_spawns();
+        // track the number of spawn slots we have consumed this loop
+        let mut spawn_slots = self.spawn_limit;
+        // clone our old counts so we can restore it
+        let old_counts = self.counts.clone();
+        // increase our fair share ranks
+        self.increase_fair_share_ranks(cache);
+        // try to allocate resources based on fair share
+        self.fairshare_allocation_with_stats(stats, cache, &mut spawn_slots);
+        // try to allocate resources based on deadline scheduling if we still have remaining spawn slots
+        if spawn_slots > 0 {
+            self.deadline_allocation_with_deadlines(deadlines, cache, &mut spawn_slots);
+        }
+        // remove any empty cluster cpu groups
+        self.clusters.retain(|_, clusters| !clusters.is_empty());
+        // restore our old counts
+        self.counts = old_counts;
+    }
+
+    /// Get the current spawn limit for testing
+    #[cfg(feature = "test-utilities")]
+    pub fn spawn_limit(&self) -> usize {
+        self.spawn_limit
+    }
+
+    /// Set the spawn limit for testing
+    #[cfg(feature = "test-utilities")]
+    pub fn set_spawn_limit(&mut self, limit: usize) {
+        self.spawn_limit = limit;
+    }
+
+    /// Testable version that accepts an image map directly
+    ///
+    /// This is the most flexible testable method, accepting pre-built image data
+    /// without requiring a Cache instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `stats` - The system stats containing user job information
+    /// * `deadlines` - The deadlines to try to meet
+    /// * `images` - Map of group -> name -> Image for lookups
+    #[cfg(feature = "test-utilities")]
+    pub fn allocate_with_image_map(
+        &mut self,
+        stats: &thorium::models::SystemStats,
+        deadlines: Vec<thorium::models::Deadline>,
+        images: &HashMap<String, HashMap<String, Image>>,
+    ) {
+        // log our clusters current resources
+        self.log_resources();
+        // check if any of our cluster is under high load
+        self.mark_high_load();
+        // empty our req map
+        self.changes.spawns.clear();
+        self.changes.scale_down.clear();
+        // reset our nodes spawn slot count
+        self.reset_spawns();
+        // track the number of spawn slots we have consumed this loop
+        let mut spawn_slots = self.spawn_limit;
+        // clone our old counts so we can restore it
+        let old_counts = self.counts.clone();
+        // increase fair share ranks using image map
+        self.increase_fair_share_ranks_with_images(images);
+        // try to allocate resources based on fair share
+        self.fairshare_allocation_with_images(stats, images, &mut spawn_slots);
+        // try to allocate resources based on deadline scheduling
+        if spawn_slots > 0 {
+            self.deadline_allocation_with_images(deadlines, images, &mut spawn_slots);
+        }
+        // remove any empty cluster cpu groups
+        self.clusters.retain(|_, clusters| !clusters.is_empty());
+        // restore our old counts
+        self.counts = old_counts;
+    }
+
+    /// Fair share allocation using image map lookup
+    #[cfg(feature = "test-utilities")]
+    fn fairshare_allocation_with_images(
+        &mut self,
+        stats: &thorium::models::SystemStats,
+        images: &HashMap<String, HashMap<String, Image>>,
+        spawn_slots: &mut usize,
+    ) {
+        // Build a map of each users outstanding job reqs
+        let mut map = stats.users_jobs();
+        // track the users that do not spawn any jobs
+        let mut no_spawns = BTreeMap::default();
+        // iterate over our users based on how many resources they have consumed
+        while let Some((rank, users)) = self.fair_share.pop_first() {
+            // get an entry to the current rank group in our no spawn map
+            let entry = no_spawns.entry(rank).or_default();
+            // try to spawn a job for each of the users in this rank group
+            self.try_fair_share_spawn_with_images(images, spawn_slots, &mut map, rank, users, entry);
+        }
+        // add the users who did not spawn anything back into our fair share tree
+        for (rank, users) in no_spawns {
+            let rank_entry = self.fair_share.entry(rank).or_default();
+            rank_entry.extend(users);
+        }
+    }
+
+    /// Try to spawn fair share jobs using image map lookup
+    #[cfg(feature = "test-utilities")]
+    fn try_fair_share_spawn_with_images(
+        &mut self,
+        images: &HashMap<String, HashMap<String, Image>>,
+        spawn_slots: &mut usize,
+        map: &mut SpawnMap<'_>,
+        rank: u64,
+        users: HashSet<String>,
+        no_spawns: &mut HashSet<String>,
+    ) {
+        // crawl over the users to try and spawn fair share jobs for
+        'user: for user in users {
+            // get the images this user is trying to spawn
+            if let Some(job_stats) = map.get_mut(&user) {
+                // crawl this users job stats from lowest current utilization to highest
+                for reqs in job_stats.values_mut() {
+                    // crawl over the images in this rank group
+                    for (req, created) in reqs.iter_mut() {
+                        // skip any images where created is 0
+                        if *created == 0 {
+                            continue;
+                        }
+                        // get this jobs image info from the map
+                        let Some(image) = images.get(&req.group).and_then(|m| m.get(&req.stage)) else {
+                            continue;
+                        };
+                        // calculate a deadline based on our runtime
+                        #[allow(clippy::cast_possible_truncation)]
+                        let deadline = from_now!(image.runtime as i64);
+                        // try to spawn this requisition
+                        if let Some((cluster, node)) = self.try_allocate(image, Pools::FairShare) {
+                            // build our newly spawned worker
+                            let spawned =
+                                Spawned::new(&cluster, &node, req.clone(), image, Pools::FairShare);
+                            // get an entry to this clusters map in our change map
+                            let cluster_entry = self.changes.spawns.entry(cluster).or_default();
+                            // get an entry to the deadline group for this spawn
+                            let spawns_entry = cluster_entry.entry(deadline).or_default();
+                            // add this new worker allocation to our change map
+                            spawns_entry.push(spawned);
+                            // get this users new fair share rank
+                            let new_rank = self.calc_fair_share(rank, 1, &image.resources);
+                            // we spawned this image under fair share so increment our users fair share rank
+                            let rank_group = self.fair_share.entry(new_rank).or_default();
+                            // add this user to their new group
+                            rank_group.insert(user);
+                            // get an entry to this reqs pending count
+                            let entry = self.fair_share_counts.entry(req.clone()).or_insert(0);
+                            // increment our spawn count
+                            *entry += 1;
+                            // decrement our created count since we are spawning an image for this
+                            *created -= 1;
+                            // consume one spawn slot
+                            *spawn_slots -= 1;
+                            // continue onto the next user
+                            continue 'user;
+                        }
+                    }
+                }
+            }
+            // this user did not spawn anything so put them in our no spawn set
+            no_spawns.insert(user);
+        }
+    }
+
+    /// Deadline allocation using image map lookup
+    #[cfg(feature = "test-utilities")]
+    fn deadline_allocation_with_images(
+        &mut self,
+        deadlines: Vec<thorium::models::Deadline>,
+        images: &HashMap<String, HashMap<String, Image>>,
+        spawn_slots: &mut usize,
+    ) {
+        // crawl over these deadlines and try to meet them
+        for deadline in deadlines {
+            // get this deadlines timestamp
+            let timestamp = deadline.deadline;
+            // build a requisition for this deadline
+            let req = Requisition::from(deadline);
+            // check if we spawned this image in the past
+            if let Some(count) = self.counts.get_mut(&req) {
+                match count.cmp(&&mut 0) {
+                    Ordering::Greater => {
+                        *count -= 1;
+                        continue;
+                    }
+                    _ => {
+                        self.counts.remove(&req);
+                    }
+                }
+            }
+            // check if we are already trying to meet this request
+            if let Some(current) = self.fair_share_counts.get_mut(&req) {
+                *current = current.saturating_sub(1);
+                if *current == 0 {
+                    self.fair_share_counts.remove(&req);
+                }
+                continue;
+            }
+            // get this jobs image info from the map
+            let Some(image) = images.get(&req.group).and_then(|m| m.get(&req.stage)) else {
+                continue;
+            };
+            // try to allocate resources for this deadline
+            if let Some((cluster, node)) = self.try_allocate(image, Pools::Deadline) {
+                let spawned = Spawned::new(&cluster, &node, req.clone(), image, Pools::Deadline);
+                let cluster_entry = self.changes.spawns.entry(cluster).or_default();
+                let spawns_entry = cluster_entry.entry(timestamp).or_default();
+                spawns_entry.push(spawned);
+            } else {
+                if self.low_resources && *spawn_slots > 0 {
+                    if self.scale_down_to_meet(timestamp, &req, image) {
+                        *spawn_slots -= 1;
+                    }
+                }
+            }
+            if *spawn_slots == 0 {
+                break;
+            }
+        }
+    }
+
+    /// Increase fair share ranks using image map lookup
+    #[cfg(feature = "test-utilities")]
+    fn increase_fair_share_ranks_with_images(
+        &mut self,
+        images: &HashMap<String, HashMap<String, Image>>,
+    ) {
+        // get all fair share ranks by user
+        let mut by_user = self.fair_share_by_user();
+        // crawl over all spawned requisitions
+        for (req, count) in &self.counts {
+            // get this requisitions images info from the map
+            if let Some(image) = images.get(&req.group).and_then(|m| m.get(&req.stage)) {
+                match by_user.get_mut(&req.user) {
+                    Some(rank) => *rank = self.calc_fair_share(*rank, *count, &image.resources),
+                    None => {
+                        let rank = self.calc_fair_share(0, *count, &image.resources);
+                        by_user.insert(req.user.clone(), rank);
+                    }
+                }
+            }
+        }
+        // reinsert our fair share ranks
+        for (user, rank) in by_user {
+            let entry = self.fair_share.entry(rank).or_default();
+            entry.insert(user);
+        }
     }
 
     /// Scale down any existing workers to meet higher priority deadlines

@@ -52,6 +52,35 @@ impl DryRunNode {
             workers: Vec::with_capacity(10),
         }
     }
+
+    /// Create a dry run node with pre-configured resources
+    ///
+    /// This is primarily for test utilities to create nodes with specific resource configurations.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of this node
+    /// * `resources` - The pre-configured resources for this node
+    #[cfg(feature = "test-utilities")]
+    pub fn from_resources(name: String, resources: NodeResources) -> Self {
+        DryRunNode {
+            health: NodeHealth::Healthy,
+            resources,
+            workers: Vec::with_capacity(10),
+        }
+    }
+
+    /// Get the health of this node
+    #[cfg(feature = "test-utilities")]
+    pub fn health(&self) -> &NodeHealth {
+        &self.health
+    }
+
+    /// Set the health of this node
+    #[cfg(feature = "test-utilities")]
+    pub fn set_health(&mut self, health: NodeHealth) {
+        self.health = health;
+    }
 }
 
 /// A dry run scheduler for testing scheduling

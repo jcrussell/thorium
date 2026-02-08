@@ -44,3 +44,4 @@ hashbrown = "0.15"
 thorium-scaler = { path = ".", features = ["test-utilities"]}
 thorium-api = { workspace = true, features = ["client", "k8s", "trace", "test-utilities"] }
 serial_test = "3"
+proptest = "1.4"
