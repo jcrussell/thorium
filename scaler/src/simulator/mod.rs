@@ -53,6 +53,9 @@ mod harness;
 mod scenario;
 mod scenarios;
 
+#[cfg(test)]
+mod tests;
+
 pub use assertions::{AssertionResult, Expectation, ExpectationBuilder};
 pub use fuzzer::{arbitrary_scenario, invariants};
 pub use generators::{

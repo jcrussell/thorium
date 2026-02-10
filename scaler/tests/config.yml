@@ -1,0 +1,54 @@
+# Test configuration for the scheduler simulator
+# This is a minimal config file for testing purposes
+
+thorium:
+  interface: "127.0.0.1"
+  port: 38000
+  namespace: "test"
+  secret_key: "test-secret-key-for-simulator-testing-only"
+  tracing:
+    local:
+      level: "Off"
+  files:
+    password: "test-password"
+    bucket: "test-files-bucket"
+  results:
+    bucket: "test-results-bucket"
+  ephemeral:
+    bucket: "test-ephemeral-bucket"
+  attachments:
+    bucket: "test-attachments-bucket"
+  repos:
+    bucket: "test-repos-bucket"
+  s3:
+    access_key: "test-access-key"
+    secret_token: "test-secret-token"
+    endpoint: "http://localhost:9000"
+    region: "us-east-1"
+    use_path_style: true
+  retention:
+    data: 10
+    logs: 10
+  web_ui:
+    version: "0.0.0"
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+
+scylla:
+  nodes:
+    - "127.0.0.1"
+  replication: 1
+
+elastic:
+  node: "http://127.0.0.1:9200"
+  username: "test"
+  password: "test"
+  insecure_certificates: true
+  results:
+    samples: "test-samples"
+    repos: "test-repos"
+  tags:
+    samples: "test-sample-tags"
+    repos: "test-repo-tags"
