@@ -325,9 +325,9 @@ impl SearchDate {
     pub fn day(year: u64, month: u8, day: u8, end: bool) -> Result<DateTime<Utc>, Error> {
         // build the rfc 3339 string for either the start or end of the year
         let raw = if end {
-            format!("{year}-{month}-{day}T00:00:00-00:00")
+            format!("{year}-{month:02}-{day:02}T00:00:00-00:00")
         } else {
-            format!("{year}-{month}-{day}T23:59:59-00:00")
+            format!("{year}-{month:02}-{day:02}T23:59:59-00:00")
         };
         Ok(DateTime::parse_from_rfc3339(&raw)?.with_timezone(&Utc))
     }
