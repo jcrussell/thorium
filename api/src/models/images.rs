@@ -5455,3 +5455,132 @@ impl Default for ImageListParams {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== ImageScaler FromStr tests ====================
+
+    #[test]
+    fn image_scaler_from_str_valid_k8s_lowercase() {
+        let result: Result<ImageScaler, _> = "k8s".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::K8s);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_k8s_capitalized() {
+        let result: Result<ImageScaler, _> = "K8s".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::K8s);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_baremetal_lowercase() {
+        let result: Result<ImageScaler, _> = "baremetal".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::BareMetal);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_baremetal_capitalized() {
+        let result: Result<ImageScaler, _> = "BareMetal".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::BareMetal);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_windows_lowercase() {
+        let result: Result<ImageScaler, _> = "windows".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::Windows);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_windows_capitalized() {
+        let result: Result<ImageScaler, _> = "Windows".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::Windows);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_kvm_lowercase() {
+        let result: Result<ImageScaler, _> = "kvm".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::Kvm);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_kvm_capitalized() {
+        let result: Result<ImageScaler, _> = "Kvm".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::Kvm);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_external_lowercase() {
+        let result: Result<ImageScaler, _> = "external".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::External);
+    }
+
+    #[test]
+    fn image_scaler_from_str_valid_external_capitalized() {
+        let result: Result<ImageScaler, _> = "External".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), ImageScaler::External);
+    }
+
+    #[test]
+    fn image_scaler_from_str_invalid_returns_error() {
+        let result: Result<ImageScaler, _> = "Invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn image_scaler_from_str_empty_returns_error() {
+        let result: Result<ImageScaler, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    // ==================== ImageScaler Display/as_str tests ====================
+
+    #[test]
+    fn image_scaler_as_str_all_variants() {
+        assert_eq!(ImageScaler::K8s.as_str(), "K8s");
+        assert_eq!(ImageScaler::BareMetal.as_str(), "BareMetal");
+        assert_eq!(ImageScaler::Windows.as_str(), "Windows");
+        assert_eq!(ImageScaler::Kvm.as_str(), "Kvm");
+        assert_eq!(ImageScaler::External.as_str(), "External");
+    }
+
+    #[test]
+    fn image_scaler_display_all_variants() {
+        assert_eq!(format!("{}", ImageScaler::K8s), "K8s");
+        assert_eq!(format!("{}", ImageScaler::BareMetal), "BareMetal");
+        assert_eq!(format!("{}", ImageScaler::Windows), "Windows");
+        assert_eq!(format!("{}", ImageScaler::Kvm), "Kvm");
+        assert_eq!(format!("{}", ImageScaler::External), "External");
+    }
+
+    #[test]
+    fn image_scaler_round_trip_all_variants() {
+        for scaler in [
+            ImageScaler::K8s,
+            ImageScaler::BareMetal,
+            ImageScaler::Windows,
+            ImageScaler::Kvm,
+            ImageScaler::External,
+        ] {
+            let as_str = scaler.as_str();
+            let parsed: ImageScaler = as_str.parse().unwrap();
+            assert_eq!(scaler, parsed);
+        }
+    }
+
+    #[test]
+    fn image_scaler_default_is_k8s() {
+        assert_eq!(ImageScaler::default(), ImageScaler::K8s);
+    }
+}

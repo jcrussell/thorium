@@ -243,7 +243,7 @@ mod tests {
     use regex::RegexSet;
     use std::path::Path;
 
-    use super::is_hidden;
+    use super::{is_hidden, prepend_current_dir};
     use crate::utils::fs::filter_file_name;
 
     #[test]
@@ -308,5 +308,135 @@ mod tests {
         ));
         // does not match filter -> should fail
         assert!(!filter_file_name(Path::new("image.png"), &filter, &skip,));
+    }
+
+    // ==================== Additional is_hidden tests ====================
+
+    #[test]
+    fn is_hidden_multiple_leading_dots() {
+        assert!(is_hidden("..config"));
+        assert!(is_hidden("...file"));
+    }
+
+    #[test]
+    fn is_hidden_with_extension() {
+        assert!(is_hidden(".gitignore"));
+        assert!(is_hidden(".env.local"));
+    }
+
+    #[test]
+    fn is_hidden_trailing_dots() {
+        // Only leading dots make files hidden
+        assert!(!is_hidden("file.."));
+        assert!(!is_hidden("file...txt"));
+    }
+
+    #[test]
+    fn is_hidden_full_path_checks_filename() {
+        // Full paths: only final component matters
+        assert!(is_hidden("/some/path/.hidden"));
+        assert!(!is_hidden("/some/.hidden/visible"));
+    }
+
+    // ==================== Additional filter_file_name tests ====================
+
+    #[test]
+    fn filter_file_name_with_only_filter() {
+        let filter = RegexSet::new([r"\.txt$"]).unwrap();
+        let skip = RegexSet::empty();
+
+        assert!(filter_file_name(Path::new("notes.txt"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("notes.md"), &filter, &skip));
+    }
+
+    #[test]
+    fn filter_file_name_with_only_skip() {
+        let filter = RegexSet::empty();
+        let skip = RegexSet::new([r"\.bak$"]).unwrap();
+
+        assert!(filter_file_name(Path::new("notes.txt"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("notes.bak"), &filter, &skip));
+    }
+
+    #[test]
+    fn filter_file_name_complex_regex() {
+        let filter = RegexSet::new([r"^test_.*\.rs$"]).unwrap();
+        let skip = RegexSet::empty();
+
+        assert!(filter_file_name(Path::new("test_foo.rs"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("foo_test.rs"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("test_foo.py"), &filter, &skip));
+    }
+
+    #[test]
+    fn filter_file_name_multiple_filters() {
+        let filter = RegexSet::new([r"\.rs$", r"\.toml$", r"^README"]).unwrap();
+        let skip = RegexSet::empty();
+
+        assert!(filter_file_name(Path::new("main.rs"), &filter, &skip));
+        assert!(filter_file_name(Path::new("Cargo.toml"), &filter, &skip));
+        assert!(filter_file_name(Path::new("README.md"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("main.py"), &filter, &skip));
+    }
+
+    #[test]
+    fn filter_file_name_multiple_skips() {
+        let filter = RegexSet::empty();
+        let skip = RegexSet::new([r"\.tmp$", r"\.bak$", r"^~"]).unwrap();
+
+        assert!(filter_file_name(Path::new("file.txt"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("file.tmp"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("file.bak"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("~lockfile"), &filter, &skip));
+    }
+
+    #[test]
+    fn filter_file_name_filter_and_skip_overlap() {
+        // When a file matches both filter and skip, skip wins
+        let filter = RegexSet::new([r"\.txt$"]).unwrap();
+        let skip = RegexSet::new([r"^temp"]).unwrap();
+
+        assert!(filter_file_name(Path::new("notes.txt"), &filter, &skip));
+        assert!(!filter_file_name(Path::new("temp.txt"), &filter, &skip)); // matches both, skip wins
+    }
+
+    // ==================== prepend_current_dir tests ====================
+
+    #[test]
+    fn prepend_current_dir_absolute_path() {
+        let path = Path::new("/absolute/path");
+        assert_eq!(prepend_current_dir(path), "/absolute/path");
+    }
+
+    #[test]
+    fn prepend_current_dir_relative_path() {
+        let path = Path::new("relative/path");
+        let result = prepend_current_dir(path);
+        assert!(result.starts_with('.'));
+        assert!(result.contains("relative"));
+    }
+
+    #[test]
+    fn prepend_current_dir_already_has_dot() {
+        let path = Path::new("./already/prefixed");
+        let result = prepend_current_dir(path);
+        // Should not double-prefix
+        assert_eq!(result, "./already/prefixed");
+    }
+
+    #[test]
+    fn prepend_current_dir_parent_dir() {
+        let path = Path::new("../parent/path");
+        let result = prepend_current_dir(path);
+        // Should not prefix paths starting with ..
+        assert_eq!(result, "../parent/path");
+    }
+
+    #[test]
+    fn prepend_current_dir_single_file() {
+        let path = Path::new("file.txt");
+        let result = prepend_current_dir(path);
+        assert!(result.starts_with('.'));
+        assert!(result.ends_with("file.txt"));
     }
 }

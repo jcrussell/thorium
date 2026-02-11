@@ -322,3 +322,62 @@ impl EventCacheStatusOpts {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== EventType FromStr tests ====================
+
+    #[test]
+    fn event_type_from_str_valid_reaction_trigger() {
+        let result: Result<EventType, _> = "ReactionTrigger".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), EventType::ReactionTrigger);
+    }
+
+    #[test]
+    fn event_type_from_str_invalid_returns_error() {
+        let result: Result<EventType, _> = "InvalidType".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn event_type_from_str_empty_returns_error() {
+        let result: Result<EventType, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn event_type_from_str_lowercase_returns_error() {
+        let result: Result<EventType, _> = "reactiontrigger".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn event_type_from_str_error_contains_input() {
+        let result: Result<EventType, _> = "BadValue".parse();
+        let err = result.unwrap_err();
+        assert!(err.0.contains("BadValue"));
+    }
+
+    // ==================== EventType Display/as_str tests ====================
+
+    #[test]
+    fn event_type_display_reaction_trigger() {
+        assert_eq!(format!("{}", EventType::ReactionTrigger), "ReactionTrigger");
+    }
+
+    #[test]
+    fn event_type_as_str_reaction_trigger() {
+        assert_eq!(EventType::ReactionTrigger.as_str(), "ReactionTrigger");
+    }
+
+    #[test]
+    fn event_type_round_trip_display_parse() {
+        let original = EventType::ReactionTrigger;
+        let displayed = original.to_string();
+        let parsed: EventType = displayed.parse().unwrap();
+        assert_eq!(original, parsed);
+    }
+}

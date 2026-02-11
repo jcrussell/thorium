@@ -332,3 +332,131 @@ impl SearchDate {
         Ok(DateTime::parse_from_rfc3339(&raw)?.with_timezone(&Utc))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== SearchDate tests ====================
+
+    #[test]
+    fn search_date_day_start_of_day() {
+        let result = SearchDate::day(2024, 6, 15, true);
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2024);
+        assert_eq!(date.month(), 6);
+        assert_eq!(date.day(), 15);
+        assert_eq!(date.hour(), 0);
+        assert_eq!(date.minute(), 0);
+        assert_eq!(date.second(), 0);
+    }
+
+    #[test]
+    fn search_date_day_end_of_day() {
+        let result = SearchDate::day(2024, 6, 15, false);
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2024);
+        assert_eq!(date.month(), 6);
+        assert_eq!(date.day(), 15);
+        assert_eq!(date.hour(), 23);
+        assert_eq!(date.minute(), 59);
+        assert_eq!(date.second(), 59);
+    }
+
+    #[test]
+    fn search_date_day_first_of_year() {
+        let result = SearchDate::day(2024, 1, 1, true);
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2024);
+        assert_eq!(date.month(), 1);
+        assert_eq!(date.day(), 1);
+    }
+
+    #[test]
+    fn search_date_day_last_of_year() {
+        let result = SearchDate::day(2024, 12, 31, false);
+        assert!(result.is_ok());
+        let date = result.unwrap();
+        assert_eq!(date.year(), 2024);
+        assert_eq!(date.month(), 12);
+        assert_eq!(date.day(), 31);
+    }
+
+    #[test]
+    fn search_date_day_invalid_month() {
+        // Month 13 is invalid
+        let result = SearchDate::day(2024, 13, 1, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn search_date_day_invalid_day() {
+        // February 30 doesn't exist
+        let result = SearchDate::day(2024, 2, 30, true);
+        assert!(result.is_err());
+    }
+
+    // ==================== Cursor builder tests ====================
+
+    #[test]
+    fn cursor_new_sets_defaults() {
+        let client = reqwest::Client::new();
+        let cursor: Cursor<()> = Cursor::new("http://test.com".to_string(), "token", &client);
+
+        assert_eq!(cursor.url, "http://test.com");
+        assert_eq!(cursor.cursor, 0);
+        assert_eq!(cursor.page, 50);
+        assert_eq!(cursor.limit, 50);
+        assert_eq!(cursor.retrieved, 0);
+        assert!(!cursor.exhausted);
+        assert!(cursor.names.is_empty());
+        assert!(cursor.details.is_empty());
+        assert!(cursor.retry);
+    }
+
+    #[test]
+    fn cursor_builder_chain() {
+        let client = reqwest::Client::new();
+        let cursor: Cursor<()> = Cursor::new("http://test.com/".to_string(), "token", &client)
+            .cursor(10)
+            .page(100)
+            .limit(500)
+            .retry(false)
+            .details();
+
+        assert_eq!(cursor.cursor, 10);
+        assert_eq!(cursor.page, 100);
+        assert_eq!(cursor.limit, 500);
+        assert!(!cursor.retry);
+        assert!(cursor.url.ends_with("details/"));
+    }
+
+    // ==================== LogsCursor builder tests ====================
+
+    #[test]
+    fn logs_cursor_new_sets_defaults() {
+        let client = reqwest::Client::new();
+        let cursor = LogsCursor::new("http://test.com".to_string(), "token", &client);
+
+        assert_eq!(cursor.url, "http://test.com");
+        assert_eq!(cursor.cursor, 0);
+        assert_eq!(cursor.page, 50);
+        assert!(cursor.limit.is_none());
+        assert_eq!(cursor.retrieved, 0);
+        assert!(!cursor.exhausted);
+        assert!(cursor.logs.logs.is_empty());
+    }
+
+    #[test]
+    fn logs_cursor_builder_chain() {
+        let client = reqwest::Client::new();
+        let cursor = LogsCursor::new("http://test.com".to_string(), "token", &client)
+            .cursor(100)
+            .page(25);
+        assert_eq!(cursor.cursor, 100);
+        assert_eq!(cursor.page, 25);
+    }
+}

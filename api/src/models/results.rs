@@ -1453,3 +1453,163 @@ impl PartialEq<OutputCollection> for OutputCollectionUpdate {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== OutputKind FromStr tests ====================
+
+    #[test]
+    fn output_kind_from_str_valid_files() {
+        let result: Result<OutputKind, _> = "Files".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), OutputKind::Files);
+    }
+
+    #[test]
+    fn output_kind_from_str_valid_repos() {
+        let result: Result<OutputKind, _> = "Repos".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), OutputKind::Repos);
+    }
+
+    #[test]
+    fn output_kind_from_str_invalid_returns_error() {
+        let result: Result<OutputKind, _> = "Invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_kind_from_str_lowercase_returns_error() {
+        let result: Result<OutputKind, _> = "files".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_kind_from_str_empty_returns_error() {
+        let result: Result<OutputKind, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_kind_as_str_all_variants() {
+        assert_eq!(OutputKind::Files.as_str(), "Files");
+        assert_eq!(OutputKind::Repos.as_str(), "Repos");
+    }
+
+    #[test]
+    fn output_kind_round_trip() {
+        for kind in [OutputKind::Files, OutputKind::Repos] {
+            let as_str = kind.as_str();
+            let parsed: OutputKind = as_str.parse().unwrap();
+            assert_eq!(kind, parsed);
+        }
+    }
+
+    // ==================== OutputDisplayType FromStr tests ====================
+
+    #[test]
+    fn output_display_type_from_str_all_valid_variants() {
+        let variants = [
+            ("Json", OutputDisplayType::Json),
+            ("String", OutputDisplayType::String),
+            ("Table", OutputDisplayType::Table),
+            ("Image", OutputDisplayType::Image),
+            ("Custom", OutputDisplayType::Custom),
+            ("Disassembly", OutputDisplayType::Disassembly),
+            ("Html", OutputDisplayType::Html),
+            ("Markdown", OutputDisplayType::Markdown),
+            ("Hidden", OutputDisplayType::Hidden),
+            ("Xml", OutputDisplayType::Xml),
+        ];
+
+        for (input, expected) in variants {
+            let result: Result<OutputDisplayType, _> = input.parse();
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+            assert_eq!(result.unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn output_display_type_from_str_invalid_returns_error() {
+        let result: Result<OutputDisplayType, _> = "Invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_display_type_from_str_lowercase_returns_error() {
+        let result: Result<OutputDisplayType, _> = "json".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_display_type_from_str_empty_returns_error() {
+        let result: Result<OutputDisplayType, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn output_display_type_as_str_all_variants() {
+        let variants = [
+            (OutputDisplayType::Json, "Json"),
+            (OutputDisplayType::String, "String"),
+            (OutputDisplayType::Table, "Table"),
+            (OutputDisplayType::Image, "Image"),
+            (OutputDisplayType::Custom, "Custom"),
+            (OutputDisplayType::Disassembly, "Disassembly"),
+            (OutputDisplayType::Html, "Html"),
+            (OutputDisplayType::Markdown, "Markdown"),
+            (OutputDisplayType::Hidden, "Hidden"),
+            (OutputDisplayType::Xml, "Xml"),
+        ];
+
+        for (display_type, expected) in variants {
+            assert_eq!(display_type.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn output_display_type_round_trip_all_variants() {
+        let all_types = [
+            OutputDisplayType::Json,
+            OutputDisplayType::String,
+            OutputDisplayType::Table,
+            OutputDisplayType::Image,
+            OutputDisplayType::Custom,
+            OutputDisplayType::Disassembly,
+            OutputDisplayType::Html,
+            OutputDisplayType::Markdown,
+            OutputDisplayType::Hidden,
+            OutputDisplayType::Xml,
+        ];
+
+        for display_type in all_types {
+            let as_str = display_type.as_str();
+            let parsed: OutputDisplayType = as_str.parse().unwrap();
+            assert_eq!(display_type, parsed);
+        }
+    }
+
+    #[test]
+    fn output_display_type_default_is_json() {
+        assert_eq!(OutputDisplayType::default(), OutputDisplayType::Json);
+    }
+
+    #[test]
+    fn output_display_type_requires_results() {
+        // Types that require results
+        assert!(OutputDisplayType::Json.requires_results());
+        assert!(OutputDisplayType::String.requires_results());
+        assert!(OutputDisplayType::Table.requires_results());
+        assert!(OutputDisplayType::Disassembly.requires_results());
+        assert!(OutputDisplayType::Html.requires_results());
+        assert!(OutputDisplayType::Markdown.requires_results());
+        assert!(OutputDisplayType::Hidden.requires_results());
+        assert!(OutputDisplayType::Xml.requires_results());
+
+        // Types that don't require results
+        assert!(!OutputDisplayType::Image.requires_results());
+        assert!(!OutputDisplayType::Custom.requires_results());
+    }
+}

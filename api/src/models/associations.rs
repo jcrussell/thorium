@@ -391,3 +391,111 @@ impl AssociationListParams {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== AssociationKind FromStr tests ====================
+
+    #[test]
+    fn association_kind_from_str_all_valid_variants() {
+        let variants = [
+            ("FileFor", AssociationKind::FileFor),
+            ("DocumentationFor", AssociationKind::DocumentationFor),
+            ("FirmwareFor", AssociationKind::FirmwareFor),
+            ("AssociatedWith", AssociationKind::AssociatedWith),
+            ("DevelopedBy", AssociationKind::DevelopedBy),
+            ("ContainsCVE", AssociationKind::ContainsCVE),
+            ("ContainsCWE", AssociationKind::ContainsCWE),
+            ("BasedIn", AssociationKind::BasedIn),
+            ("ParentCompanyOf", AssociationKind::ParentCompanyOf),
+            ("EmployedBy", AssociationKind::EmployedBy),
+            ("UsedBy", AssociationKind::UsedBy),
+            ("UsedIn", AssociationKind::UsedIn),
+            ("PerformedBy", AssociationKind::PerformedBy),
+        ];
+
+        for (input, expected) in variants {
+            let result: Result<AssociationKind, _> = input.parse();
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+            assert_eq!(result.unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn association_kind_from_str_invalid_returns_error() {
+        let result: Result<AssociationKind, _> = "InvalidKind".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn association_kind_from_str_lowercase_returns_error() {
+        let result: Result<AssociationKind, _> = "filefor".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn association_kind_from_str_empty_returns_error() {
+        let result: Result<AssociationKind, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn association_kind_from_str_error_contains_input() {
+        let result: Result<AssociationKind, _> = "BadValue".parse();
+        let err = result.unwrap_err();
+        assert!(err.0.contains("BadValue"));
+    }
+
+    // ==================== AssociationKind Display/as_str tests ====================
+
+    #[test]
+    fn association_kind_display_all_variants() {
+        let variants = [
+            (AssociationKind::FileFor, "FileFor"),
+            (AssociationKind::DocumentationFor, "DocumentationFor"),
+            (AssociationKind::FirmwareFor, "FirmwareFor"),
+            (AssociationKind::AssociatedWith, "AssociatedWith"),
+            (AssociationKind::DevelopedBy, "DevelopedBy"),
+            (AssociationKind::ContainsCVE, "ContainsCVE"),
+            (AssociationKind::ContainsCWE, "ContainsCWE"),
+            (AssociationKind::BasedIn, "BasedIn"),
+            (AssociationKind::ParentCompanyOf, "ParentCompanyOf"),
+            (AssociationKind::EmployedBy, "EmployedBy"),
+            (AssociationKind::UsedBy, "UsedBy"),
+            (AssociationKind::UsedIn, "UsedIn"),
+            (AssociationKind::PerformedBy, "PerformedBy"),
+        ];
+
+        for (kind, expected) in variants {
+            assert_eq!(format!("{}", kind), expected);
+            assert_eq!(kind.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn association_kind_round_trip_all_variants() {
+        let all_kinds = [
+            AssociationKind::FileFor,
+            AssociationKind::DocumentationFor,
+            AssociationKind::FirmwareFor,
+            AssociationKind::AssociatedWith,
+            AssociationKind::DevelopedBy,
+            AssociationKind::ContainsCVE,
+            AssociationKind::ContainsCWE,
+            AssociationKind::BasedIn,
+            AssociationKind::ParentCompanyOf,
+            AssociationKind::EmployedBy,
+            AssociationKind::UsedBy,
+            AssociationKind::UsedIn,
+            AssociationKind::PerformedBy,
+        ];
+
+        for kind in all_kinds {
+            let displayed = kind.to_string();
+            let parsed: AssociationKind = displayed.parse().unwrap();
+            assert_eq!(kind, parsed);
+        }
+    }
+}

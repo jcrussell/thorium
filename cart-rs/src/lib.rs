@@ -256,6 +256,9 @@ use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
 mod errors;
 mod libs;
 
+#[cfg(test)]
+mod tests;
+
 pub use errors::Error;
 pub use libs::{footer, footer::Footer, header, header::Header};
 

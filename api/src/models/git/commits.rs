@@ -881,3 +881,86 @@ impl FromStr for CommitishKinds {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== CommitishKinds FromStr tests ====================
+
+    #[test]
+    fn commitish_kinds_from_str_all_valid_variants() {
+        let cases = [
+            ("Commit", CommitishKinds::Commit),
+            ("Branch", CommitishKinds::Branch),
+            ("Tag", CommitishKinds::Tag),
+        ];
+        for (input, expected) in cases {
+            let parsed: CommitishKinds = input.parse().unwrap();
+            assert_eq!(parsed, expected);
+        }
+    }
+
+    #[test]
+    fn commitish_kinds_from_str_invalid_returns_error() {
+        let result: Result<CommitishKinds, _> = "Invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn commitish_kinds_from_str_lowercase_returns_error() {
+        let result: Result<CommitishKinds, _> = "commit".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn commitish_kinds_from_str_empty_returns_error() {
+        let result: Result<CommitishKinds, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn commitish_kinds_from_str_error_contains_input() {
+        let result: Result<CommitishKinds, _> = "BadValue".parse();
+        let err = result.unwrap_err();
+        assert!(err.0.contains("BadValue"));
+    }
+
+    // ==================== CommitishKinds Display/as_str tests ====================
+
+    #[test]
+    fn commitish_kinds_as_str_all_variants() {
+        assert_eq!(CommitishKinds::Commit.as_str(), "Commit");
+        assert_eq!(CommitishKinds::Branch.as_str(), "Branch");
+        assert_eq!(CommitishKinds::Tag.as_str(), "Tag");
+    }
+
+    #[test]
+    fn commitish_kinds_display_all_variants() {
+        assert_eq!(format!("{}", CommitishKinds::Commit), "Commit");
+        assert_eq!(format!("{}", CommitishKinds::Branch), "Branch");
+        assert_eq!(format!("{}", CommitishKinds::Tag), "Tag");
+    }
+
+    #[test]
+    fn commitish_kinds_round_trip_all_variants() {
+        for kind in [
+            CommitishKinds::Commit,
+            CommitishKinds::Branch,
+            CommitishKinds::Tag,
+        ] {
+            let displayed = kind.to_string();
+            let parsed: CommitishKinds = displayed.parse().unwrap();
+            assert_eq!(kind, parsed);
+        }
+    }
+
+    #[test]
+    fn commitish_kinds_all_returns_all_variants() {
+        let all = CommitishKinds::all();
+        assert_eq!(all.len(), 3);
+        assert!(all.contains(&CommitishKinds::Commit));
+        assert!(all.contains(&CommitishKinds::Branch));
+        assert!(all.contains(&CommitishKinds::Tag));
+    }
+}

@@ -390,3 +390,36 @@ impl DataCache {
         self.repos.clear();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== FilteredEvents tests ====================
+
+    #[test]
+    fn filtered_events_default_creates_empty_vecs() {
+        let events = FilteredEvents::default();
+        assert!(events.confirmed.is_empty());
+        assert!(events.potentials.is_empty());
+        assert!(events.clears.is_empty());
+    }
+
+    #[test]
+    fn filtered_events_with_capacity_zero() {
+        let events = FilteredEvents::with_capacity(0, 0, 0);
+        assert!(events.confirmed.is_empty());
+        assert!(events.potentials.is_empty());
+        assert!(events.clears.is_empty());
+    }
+
+    // ==================== DataCache tests ====================
+
+    #[test]
+    fn data_cache_default_is_empty() {
+        let cache = DataCache::default();
+        assert!(cache.samples.is_empty());
+        assert!(cache.repos.is_empty());
+    }
+
+}

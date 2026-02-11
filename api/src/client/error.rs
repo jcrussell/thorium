@@ -583,3 +583,184 @@ impl From<rmcp::service::ServiceError> for Error {
         Error::RmcpServiceError(error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Error::new tests ====================
+
+    #[test]
+    fn error_new_creates_generic() {
+        let err = Error::new("test message");
+        assert!(matches!(err, Error::Generic(_)));
+    }
+
+    #[test]
+    fn error_new_stores_message() {
+        let err = Error::new("test message");
+        assert_eq!(err.msg(), Some("test message".to_string()));
+    }
+
+    // ==================== Error::status tests ====================
+
+    #[test]
+    fn status_returns_some_for_thorium_error() {
+        let err = Error::Thorium {
+            code: StatusCode::NOT_FOUND,
+            msg: Some("not found".to_string()),
+        };
+        assert_eq!(err.status(), Some(StatusCode::NOT_FOUND));
+    }
+
+    #[test]
+    fn status_returns_none_for_generic() {
+        let err = Error::Generic("message".to_string());
+        assert!(err.status().is_none());
+    }
+
+    #[test]
+    fn status_returns_none_for_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let err = Error::IO(io_err);
+        assert!(err.status().is_none());
+    }
+
+    // ==================== Error::msg tests ====================
+
+    #[test]
+    fn msg_returns_message_for_thorium() {
+        let err = Error::Thorium {
+            code: StatusCode::BAD_REQUEST,
+            msg: Some("bad request".to_string()),
+        };
+        assert_eq!(err.msg(), Some("bad request".to_string()));
+    }
+
+    #[test]
+    fn msg_returns_none_for_thorium_without_msg() {
+        let err = Error::Thorium {
+            code: StatusCode::BAD_REQUEST,
+            msg: None,
+        };
+        assert!(err.msg().is_none());
+    }
+
+    #[test]
+    fn msg_returns_message_for_generic() {
+        let err = Error::Generic("generic message".to_string());
+        assert_eq!(err.msg(), Some("generic message".to_string()));
+    }
+
+    #[test]
+    fn msg_returns_message_for_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err = Error::IO(io_err);
+        let msg = err.msg().unwrap();
+        assert!(msg.contains("file not found"));
+    }
+
+    #[test]
+    fn msg_returns_message_for_shell_expand() {
+        let err = Error::ShellExpand("shell error".to_string());
+        assert_eq!(err.msg(), Some("shell error".to_string()));
+    }
+
+    // ==================== Error::kind tests ====================
+
+    #[test]
+    fn kind_returns_correct_string_for_all_variants() {
+        let cases: Vec<(Error, &str)> = vec![
+            (Error::Thorium { code: StatusCode::OK, msg: None }, "Thorium"),
+            (Error::Generic("msg".to_string()), "Generic"),
+            (Error::IO(std::io::Error::new(std::io::ErrorKind::NotFound, "")), "IO"),
+            (Error::Uuid(uuid::Uuid::parse_str("invalid").unwrap_err()), "Uuid"),
+            (Error::Serde(serde_json::from_str::<i32>("invalid").unwrap_err()), "Serde"),
+            (Error::ParseInt("abc".parse::<i32>().unwrap_err()), "ParseInt"),
+        ];
+        for (err, expected_kind) in cases {
+            assert_eq!(err.kind(), expected_kind);
+        }
+    }
+
+    // ==================== Display tests ====================
+
+    #[test]
+    fn display_shows_code_and_msg() {
+        let err = Error::Thorium {
+            code: StatusCode::NOT_FOUND,
+            msg: Some("resource not found".to_string()),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("404"));
+        assert!(display.contains("resource not found"));
+    }
+
+    #[test]
+    fn display_shows_only_msg_when_no_code() {
+        let err = Error::Generic("error message".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("error message"));
+    }
+
+    #[test]
+    fn display_shows_only_code_when_no_msg() {
+        let err = Error::Thorium {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            msg: None,
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("500"));
+    }
+
+    // ==================== From implementations tests ====================
+
+    #[test]
+    fn from_converts_to_correct_kind() {
+        let cases: Vec<(Error, &str)> = vec![
+            (std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied").into(), "IO"),
+            (uuid::Uuid::parse_str("not-a-uuid").unwrap_err().into(), "Uuid"),
+            (serde_json::from_str::<i32>("\"string\"").unwrap_err().into(), "Serde"),
+            (i8::try_from(256i32).unwrap_err().into(), "TryFromInt"),
+            (url::Url::parse("not a url").unwrap_err().into(), "UrlParse"),
+            (regex::Regex::new("[invalid").unwrap_err().into(), "Regex"),
+        ];
+        for (err, expected_kind) in cases {
+            assert_eq!(err.kind(), expected_kind);
+        }
+    }
+
+    #[test]
+    fn from_parse_int_error() {
+        // Note: From<ParseIntError> creates a Generic error with the message
+        let parse_err = "not_a_number".parse::<i32>().unwrap_err();
+        let err: Error = parse_err.into();
+        // The From impl converts to Generic, not ParseInt
+        assert_eq!(err.kind(), "Generic");
+        assert!(err.msg().unwrap().contains("invalid digit"));
+    }
+
+    // ==================== Thorium error variant tests ====================
+
+    #[test]
+    fn thorium_error_common_status_codes() {
+        let codes = [
+            StatusCode::OK,
+            StatusCode::CREATED,
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::FORBIDDEN,
+            StatusCode::NOT_FOUND,
+            StatusCode::CONFLICT,
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ];
+
+        for code in codes {
+            let err = Error::Thorium {
+                code,
+                msg: Some(format!("error with code {}", code)),
+            };
+            assert_eq!(err.status(), Some(code));
+        }
+    }
+}

@@ -58,3 +58,66 @@ impl Keys {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_new_token_sets_fields_correctly() {
+        let keys = Keys::new_token("https://api.example.com", "my-token");
+        assert_eq!(keys.api, "https://api.example.com");
+        assert_eq!(keys.token, Some("my-token".to_string()));
+        assert!(keys.username.is_none());
+        assert!(keys.password.is_none());
+    }
+
+    #[test]
+    fn keys_new_token_accepts_string_types() {
+        let api = String::from("https://api.example.com");
+        let token = String::from("my-token");
+        let keys = Keys::new_token(api, token);
+        assert_eq!(keys.api, "https://api.example.com");
+        assert_eq!(keys.token, Some("my-token".to_string()));
+    }
+
+    #[test]
+    fn keys_serializes_to_yaml() {
+        let keys = Keys::new_token("https://api.example.com", "my-token");
+        let yaml = serde_yaml::to_string(&keys).unwrap();
+        assert!(yaml.contains("api:"));
+        assert!(yaml.contains("https://api.example.com"));
+        assert!(yaml.contains("token:"));
+        assert!(yaml.contains("my-token"));
+        // username and password are skipped when None
+        assert!(!yaml.contains("username:"));
+        assert!(!yaml.contains("password:"));
+    }
+
+    #[test]
+    fn keys_deserializes_from_yaml() {
+        let yaml = r#"
+api: https://api.example.com
+token: my-token
+"#;
+        let keys: Keys = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(keys.api, "https://api.example.com");
+        assert_eq!(keys.token, Some("my-token".to_string()));
+        assert!(keys.username.is_none());
+        assert!(keys.password.is_none());
+    }
+
+    #[test]
+    fn keys_deserializes_with_basic_auth() {
+        let yaml = r#"
+api: https://api.example.com
+username: user
+password: pass
+"#;
+        let keys: Keys = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(keys.api, "https://api.example.com");
+        assert_eq!(keys.username, Some("user".to_string()));
+        assert_eq!(keys.password, Some("pass".to_string()));
+        assert!(keys.token.is_none());
+    }
+}

@@ -252,3 +252,173 @@ macro_rules! raw_entry_map_extend {
 pub fn assert_send_stream<R>(it: impl Send + Stream<Item = R>) -> impl Send + Stream<Item = R> {
     it
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper to create a Quantity from a string
+    fn make_quantity(s: &str) -> Quantity {
+        Quantity(s.to_string())
+    }
+
+    // ==================== cpu() tests ====================
+
+    #[test]
+    fn cpu_none_returns_zero() {
+        assert_eq!(cpu(None).unwrap(), 0);
+    }
+
+    #[test]
+    fn cpu_whole_cores_float() {
+        // 2 cores = 2000 millicpu
+        let qty = make_quantity("2");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 2000);
+    }
+
+    #[test]
+    fn cpu_fractional_cores() {
+        // 0.5 cores = 500 millicpu
+        let qty = make_quantity("0.5");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 500);
+    }
+
+    #[test]
+    fn cpu_millicpu_format() {
+        // 250m = 250 millicpu
+        let qty = make_quantity("250m");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 250);
+    }
+
+    #[test]
+    fn cpu_one_core() {
+        let qty = make_quantity("1");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 1000);
+    }
+
+    #[test]
+    fn cpu_decimal_cores() {
+        // 1.5 cores = 1500 millicpu
+        let qty = make_quantity("1.5");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 1500);
+    }
+
+    #[test]
+    fn cpu_small_millicpu() {
+        let qty = make_quantity("100m");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 100);
+    }
+
+    #[test]
+    fn cpu_large_millicpu() {
+        let qty = make_quantity("4000m");
+        assert_eq!(cpu(Some(&qty)).unwrap(), 4000);
+    }
+
+    // ==================== storage() tests ====================
+
+    #[test]
+    fn storage_none_returns_zero() {
+        assert_eq!(storage(None).unwrap(), 0);
+    }
+
+    #[test]
+    fn storage_mebibytes() {
+        // 100Mi = 100 mebibytes
+        let qty = make_quantity("100Mi");
+        assert_eq!(storage(Some(&qty)).unwrap(), 100);
+    }
+
+    #[test]
+    fn storage_gibibytes() {
+        // 1Gi = 1024 mebibytes
+        let qty = make_quantity("1Gi");
+        assert_eq!(storage(Some(&qty)).unwrap(), 1024);
+    }
+
+    #[test]
+    fn storage_two_gibibytes() {
+        // 2Gi = 2048 mebibytes
+        let qty = make_quantity("2Gi");
+        assert_eq!(storage(Some(&qty)).unwrap(), 2048);
+    }
+
+    #[test]
+    fn storage_megabytes_decimal() {
+        // 100M ≈ 95 mebibytes (100/1.049 rounded up)
+        let qty = make_quantity("100M");
+        let result = storage(Some(&qty)).unwrap();
+        assert!(result >= 95 && result <= 96);
+    }
+
+    #[test]
+    fn storage_gigabytes_decimal() {
+        // 1G = 954 mebibytes
+        let qty = make_quantity("1G");
+        assert_eq!(storage(Some(&qty)).unwrap(), 954);
+    }
+
+    #[test]
+    fn storage_kibibytes() {
+        // 1024Ki = 1 mebibyte
+        let qty = make_quantity("1024Ki");
+        assert_eq!(storage(Some(&qty)).unwrap(), 1);
+    }
+
+    #[test]
+    fn storage_tebibytes() {
+        // 1Ti = 1,049,000 mebibytes (approximately)
+        let qty = make_quantity("1Ti");
+        let result = storage(Some(&qty)).unwrap();
+        assert!(result >= 1048576 && result <= 1050000);
+    }
+
+    #[test]
+    fn storage_raw_bytes() {
+        // 1048576 bytes = 1 mebibyte
+        let qty = make_quantity("1048576");
+        assert_eq!(storage(Some(&qty)).unwrap(), 1);
+    }
+
+    #[test]
+    fn storage_large_bytes() {
+        // 10485760 bytes ≈ 10 mebibytes
+        let qty = make_quantity("10485760");
+        assert_eq!(storage(Some(&qty)).unwrap(), 10);
+    }
+
+    // ==================== gen_string() tests ====================
+
+    #[test]
+    fn gen_string_correct_length() {
+        let s = gen_string(10);
+        assert_eq!(s.len(), 10);
+    }
+
+    #[test]
+    fn gen_string_zero_length() {
+        let s = gen_string(0);
+        assert_eq!(s.len(), 0);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn gen_string_only_alphanumeric() {
+        let s = gen_string(100);
+        assert!(s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn gen_string_different_each_time() {
+        let s1 = gen_string(20);
+        let s2 = gen_string(20);
+        // While theoretically could be equal, probability is negligible
+        assert_ne!(s1, s2);
+    }
+
+    #[test]
+    fn gen_string_large() {
+        let s = gen_string(1000);
+        assert_eq!(s.len(), 1000);
+    }
+}

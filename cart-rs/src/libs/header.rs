@@ -140,3 +140,218 @@ impl Header {
         HEADER_LEN + self.opt_len
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper to create a valid 16-byte key
+    fn valid_key() -> [u8; KEY_LEN] {
+        *b"SecretCornIs16!!"
+    }
+
+    // ==================== validate_key tests ====================
+
+    #[test]
+    fn validate_key_accepts_16_byte_key() {
+        let key = valid_key();
+        assert!(Header::validate_key(&key).is_ok());
+    }
+
+    #[test]
+    fn validate_key_rejects_15_byte_key() {
+        let key = [0u8; 15];
+        let result = Header::validate_key(&key);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_key_rejects_17_byte_key() {
+        let key = [0u8; 17];
+        let result = Header::validate_key(&key);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_key_rejects_empty_key() {
+        let key: [u8; 0] = [];
+        let result = Header::validate_key(&key);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_key_error_message_contains_lengths() {
+        let key = [0u8; 10];
+        let result = Header::validate_key(&key);
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("16"), "Should mention expected length 16");
+        assert!(err_msg.contains("10"), "Should mention actual length 10");
+    }
+
+    // ==================== validate tests ====================
+
+    #[test]
+    fn validate_accepts_cart_magic_number() {
+        let mut buf = [0u8; HEADER_LEN];
+        buf[..4].copy_from_slice(MAGIC_NUM);
+        assert!(Header::validate(&buf).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_wrong_magic_number() {
+        let mut buf = [0u8; HEADER_LEN];
+        buf[..4].copy_from_slice(b"TRAC"); // footer magic, not header
+        let result = Header::validate(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_rejects_buffer_too_small() {
+        let buf = [0u8; 3];
+        let result = Header::validate(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_rejects_empty_buffer() {
+        let buf: [u8; 0] = [];
+        let result = Header::validate(&buf);
+        assert!(result.is_err());
+    }
+
+    // ==================== write tests ====================
+
+    #[test]
+    fn write_places_magic_number_at_start() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        assert_eq!(&buf[..4], MAGIC_NUM);
+    }
+
+    #[test]
+    fn write_rejects_invalid_key_length() {
+        let key = [0u8; 10];
+        let mut buf = [0u8; HEADER_LEN];
+        let result = Header::write(&key, &mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn write_fails_with_insufficient_buffer() {
+        let key = valid_key();
+        let mut buf = [0u8; 10]; // Too small
+        let result = Header::write(&key, &mut buf);
+        assert!(result.is_err());
+    }
+
+    // ==================== new_buffer tests ====================
+
+    #[test]
+    fn new_buffer_creates_correct_size() {
+        let key = valid_key();
+        let extra_len = 100;
+        let buf = Header::new_buffer(&key, extra_len).unwrap();
+        assert_eq!(buf.len(), HEADER_LEN + extra_len);
+    }
+
+    #[test]
+    fn new_buffer_writes_header_at_start() {
+        let key = valid_key();
+        let buf = Header::new_buffer(&key, 100).unwrap();
+        assert_eq!(&buf[..4], MAGIC_NUM);
+    }
+
+    #[test]
+    fn new_buffer_rejects_invalid_key() {
+        let key = [0u8; 10];
+        let result = Header::new_buffer(&key, 100);
+        assert!(result.is_err());
+    }
+
+    // ==================== get tests ====================
+
+    #[test]
+    fn get_extracts_version() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        let header = Header::get(&buf).unwrap();
+        assert_eq!(header.version, 1);
+    }
+
+    #[test]
+    fn get_extracts_key() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        let header = Header::get(&buf).unwrap();
+        assert_eq!(header.key, key.to_vec());
+    }
+
+    #[test]
+    fn get_extracts_opt_len_as_zero() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        let header = Header::get(&buf).unwrap();
+        assert_eq!(header.opt_len, 0);
+    }
+
+    #[test]
+    fn get_rejects_invalid_magic_number() {
+        let mut buf = [0u8; HEADER_LEN];
+        buf[..4].copy_from_slice(b"TRAC");
+        let result = Header::get(&buf);
+        assert!(result.is_err());
+    }
+
+    // ==================== round-trip tests ====================
+
+    #[test]
+    fn round_trip_write_then_get() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        let header = Header::get(&buf).unwrap();
+        assert_eq!(header.version, 1);
+        assert_eq!(header.key, key.to_vec());
+        assert_eq!(header.opt_len, 0);
+    }
+
+    #[test]
+    fn round_trip_with_different_keys() {
+        let keys = [
+            *b"0123456789abcdef",
+            *b"fedcba9876543210",
+            *b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+        ];
+        for key in keys {
+            let mut buf = [0u8; HEADER_LEN];
+            Header::write(&key, &mut buf).unwrap();
+            let header = Header::get(&buf).unwrap();
+            assert_eq!(header.key, key.to_vec());
+        }
+    }
+
+    // ==================== skip tests ====================
+
+    #[test]
+    fn skip_returns_header_len_when_no_opt() {
+        let key = valid_key();
+        let mut buf = [0u8; HEADER_LEN];
+        Header::write(&key, &mut buf).unwrap();
+        let header = Header::get(&buf).unwrap();
+        assert_eq!(header.skip(), HEADER_LEN);
+    }
+
+    #[test]
+    fn skip_includes_opt_len() {
+        let header = Header {
+            version: 1,
+            key: valid_key().to_vec(),
+            opt_len: 100,
+        };
+        assert_eq!(header.skip(), HEADER_LEN + 100);
+    }
+}

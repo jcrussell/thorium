@@ -36,3 +36,68 @@ pub trait Utils {
         Self::name().replace('_', " ")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test struct implementing Utils trait
+    struct TestTable;
+    impl Utils for TestTable {
+        fn name() -> &'static str {
+            "test_table_name"
+        }
+    }
+
+    struct SingleWordTable;
+    impl Utils for SingleWordTable {
+        fn name() -> &'static str {
+            "samples"
+        }
+    }
+
+    struct MultiUnderscoreTable;
+    impl Utils for MultiUnderscoreTable {
+        fn name() -> &'static str {
+            "user_login_history"
+        }
+    }
+
+    struct EmptyTable;
+    impl Utils for EmptyTable {
+        fn name() -> &'static str {
+            ""
+        }
+    }
+
+    // ==================== Utils::name tests ====================
+
+    #[test]
+    fn utils_name_returns_static_str() {
+        assert_eq!(TestTable::name(), "test_table_name");
+    }
+
+    // ==================== Utils::pretty_name tests ====================
+
+    #[test]
+    fn utils_pretty_name_replaces_underscores() {
+        assert_eq!(TestTable::pretty_name(), "test table name");
+    }
+
+    #[test]
+    fn utils_pretty_name_single_word() {
+        // No underscores, should be unchanged
+        assert_eq!(SingleWordTable::pretty_name(), "samples");
+    }
+
+    #[test]
+    fn utils_pretty_name_multiple_underscores() {
+        assert_eq!(MultiUnderscoreTable::pretty_name(), "user login history");
+    }
+
+    #[test]
+    fn utils_pretty_name_empty() {
+        assert_eq!(EmptyTable::pretty_name(), "");
+    }
+
+}

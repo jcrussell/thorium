@@ -664,3 +664,89 @@ impl crate::models::CountCursorSupport for TagCounts {
         Ok((self.cursor, total, self.tags))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== TagType FromStr tests ====================
+
+    #[test]
+    fn tag_type_from_str_valid_files() {
+        let result: Result<TagType, _> = "Files".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), TagType::Files);
+    }
+
+    #[test]
+    fn tag_type_from_str_valid_repos() {
+        let result: Result<TagType, _> = "Repos".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), TagType::Repos);
+    }
+
+    #[test]
+    fn tag_type_from_str_valid_entities() {
+        let result: Result<TagType, _> = "Entities".parse();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), TagType::Entities);
+    }
+
+    #[test]
+    fn tag_type_from_str_invalid_returns_error() {
+        let result: Result<TagType, _> = "Invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tag_type_from_str_lowercase_returns_error() {
+        let result: Result<TagType, _> = "files".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tag_type_from_str_empty_returns_error() {
+        let result: Result<TagType, _> = "".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tag_type_from_str_error_contains_input() {
+        let result: Result<TagType, _> = "BadValue".parse();
+        let err = result.unwrap_err();
+        assert!(err.0.contains("BadValue"));
+    }
+
+    // ==================== TagType Display/as_str tests ====================
+
+    #[test]
+    fn tag_type_display_files() {
+        assert_eq!(format!("{}", TagType::Files), "Files");
+    }
+
+    #[test]
+    fn tag_type_display_repos() {
+        assert_eq!(format!("{}", TagType::Repos), "Repos");
+    }
+
+    #[test]
+    fn tag_type_display_entities() {
+        assert_eq!(format!("{}", TagType::Entities), "Entities");
+    }
+
+    #[test]
+    fn tag_type_as_str_all_variants() {
+        assert_eq!(TagType::Files.as_str(), "Files");
+        assert_eq!(TagType::Repos.as_str(), "Repos");
+        assert_eq!(TagType::Entities.as_str(), "Entities");
+    }
+
+    #[test]
+    fn tag_type_round_trip_all_variants() {
+        for tag_type in [TagType::Files, TagType::Repos, TagType::Entities] {
+            let displayed = tag_type.to_string();
+            let parsed: TagType = displayed.parse().unwrap();
+            assert_eq!(tag_type, parsed);
+        }
+    }
+}

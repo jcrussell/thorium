@@ -116,6 +116,66 @@ fn get_resources(system: &mut System, span: &Span) -> Result<Resources, Error> {
     Ok(resources)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Tasks enum tests ====================
+
+    #[test]
+    fn tasks_as_str_resources() {
+        assert_eq!(Tasks::Resources.as_str(), "Resources");
+    }
+
+    #[test]
+    fn tasks_delay_resources() {
+        assert_eq!(Tasks::Resources.delay(), 20);
+    }
+
+    #[test]
+    fn tasks_setup_queue_contains_resources() {
+        let queue = Tasks::setup_queue();
+        // Should contain Resources task
+        assert!(queue.values().any(|t| *t == Tasks::Resources));
+    }
+
+    #[test]
+    fn tasks_setup_queue_timestamps_in_future() {
+        let now = Utc::now();
+        let queue = Tasks::setup_queue();
+        for (timestamp, _) in &queue {
+            assert!(*timestamp > now);
+        }
+    }
+
+    // ==================== from_now macro tests ====================
+
+    #[test]
+    fn from_now_macro_adds_seconds() {
+        let before = Utc::now();
+        let future = from_now!(10);
+        let after = Utc::now();
+
+        // future should be at least 9 seconds after 'before'
+        let diff = (future - before).num_seconds();
+        assert!(diff >= 9 && diff <= 11);
+
+        // future should be after 'after'
+        assert!(future > after);
+    }
+
+    #[test]
+    fn from_now_macro_zero_seconds() {
+        let before = Utc::now();
+        let future = from_now!(0);
+        let after = Utc::now();
+
+        // Should be between before and after (approximately now)
+        assert!(future >= before);
+        assert!(future <= after + chrono::Duration::seconds(1));
+    }
+}
+
 /// Get this nodes resources and update Thorium
 pub async fn update_resources(
     cluster: &str,

@@ -134,4 +134,72 @@ mod tests {
         path = PathBuf::from("/...........valid/path");
         assert!(HostPath::is_valid(path));
     }
+
+    // ==================== Additional HostPath validation tests ====================
+
+    #[test]
+    fn test_host_path_absolute_simple() {
+        assert!(HostPath::is_valid(PathBuf::from("/home/user")));
+        assert!(HostPath::is_valid(PathBuf::from("/var/log")));
+        assert!(HostPath::is_valid(PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn test_host_path_root() {
+        assert!(HostPath::is_valid(PathBuf::from("/")));
+    }
+
+    #[test]
+    fn test_host_path_rejects_traversal_at_end() {
+        assert!(!HostPath::is_valid(PathBuf::from("/valid/path/..")));
+    }
+
+    #[test]
+    fn test_host_path_rejects_traversal_in_middle() {
+        assert!(!HostPath::is_valid(PathBuf::from("/valid/../path")));
+    }
+
+    #[test]
+    fn test_host_path_rejects_hidden_traversal() {
+        assert!(!HostPath::is_valid(PathBuf::from("/valid/./hidden/../path")));
+    }
+
+    #[test]
+    fn test_host_path_with_hidden_dirs() {
+        // Hidden directories starting with . are valid
+        assert!(HostPath::is_valid(PathBuf::from("/home/user/.config")));
+        assert!(HostPath::is_valid(PathBuf::from("/home/.hidden/file")));
+    }
+
+    #[test]
+    fn test_host_path_with_spaces() {
+        assert!(HostPath::is_valid(PathBuf::from("/path/with spaces/here")));
+    }
+
+    #[test]
+    fn test_host_path_unicode() {
+        assert!(HostPath::is_valid(PathBuf::from("/日本語/パス")));
+        assert!(HostPath::is_valid(PathBuf::from("/путь/к/файлу")));
+    }
+
+    #[test]
+    fn test_host_path_with_numbers() {
+        assert!(HostPath::is_valid(PathBuf::from("/var/log/123")));
+        assert!(HostPath::is_valid(PathBuf::from("/001/002/003")));
+    }
+
+    #[test]
+    fn test_host_path_deep_nesting() {
+        assert!(HostPath::is_valid(PathBuf::from("/a/b/c/d/e/f/g/h/i/j")));
+    }
+
+    #[test]
+    fn test_host_path_rejects_relative_with_leading_dot() {
+        assert!(!HostPath::is_valid(PathBuf::from("./relative")));
+    }
+
+    #[test]
+    fn test_host_path_rejects_relative_no_slash() {
+        assert!(!HostPath::is_valid(PathBuf::from("just_a_name")));
+    }
 }

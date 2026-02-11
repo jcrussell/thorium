@@ -388,3 +388,40 @@ pub async fn cleanup(thorium: Arc<Thorium>) -> Result<TaskResult, Error> {
     thorium.system.cleanup().await?;
     Ok(TaskResult::UpdateRuntimes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Tasks enum tests ====================
+
+    #[test]
+    fn tasks_as_str_all_variants() {
+        let cases = [
+            (Tasks::ZombieJobs, "ZombieJobs"),
+            (Tasks::LdapSync, "LdapSync"),
+            (Tasks::CacheReload, "CacheReload"),
+            (Tasks::Resources, "Resources"),
+            (Tasks::UpdateRuntimes, "UpdateRuntimes"),
+            (Tasks::Cleanup, "Cleanup"),
+            (Tasks::DecreaseFairShare, "DecreaseFairShare"),
+        ];
+        for (task, expected) in cases {
+            assert_eq!(task.as_str(), expected);
+        }
+    }
+
+    // ==================== TaskResult enum tests ====================
+
+    #[test]
+    fn task_result_as_str_all_variants() {
+        let cases = [
+            (TaskResult::ZombieJobs, "ZombieJobs"),
+            (TaskResult::LdapSync, "LdapSync"),
+            (TaskResult::UpdateRuntimes, "UpdateRuntimes"),
+        ];
+        for (result, expected) in cases {
+            assert_eq!(result.as_str(), expected);
+        }
+    }
+}

@@ -1051,3 +1051,166 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== NetworkPolicyUpdate::validate tests ====================
+
+    #[test]
+    fn validate_rejects_empty_update() {
+        let update = NetworkPolicyUpdate::default();
+        let result = update.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_accepts_new_name_only() {
+        let update = NetworkPolicyUpdate {
+            new_name: Some("new-name".to_string()),
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_add_groups() {
+        let update = NetworkPolicyUpdate {
+            add_groups: vec!["group1".to_string()],
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_clear_ingress_alone() {
+        let update = NetworkPolicyUpdate {
+            clear_ingress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_deny_all_ingress_alone() {
+        let update = NetworkPolicyUpdate {
+            deny_all_ingress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_clear_and_deny_ingress() {
+        let update = NetworkPolicyUpdate {
+            clear_ingress: true,
+            deny_all_ingress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_accepts_clear_egress_alone() {
+        let update = NetworkPolicyUpdate {
+            clear_egress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_deny_all_egress_alone() {
+        let update = NetworkPolicyUpdate {
+            deny_all_egress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_clear_and_deny_egress() {
+        let update = NetworkPolicyUpdate {
+            clear_egress: true,
+            deny_all_egress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_accepts_mixed_ingress_egress() {
+        // clear_ingress + deny_all_egress is fine
+        let update = NetworkPolicyUpdate {
+            clear_ingress: true,
+            deny_all_egress: true,
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_forced_policy_change() {
+        let update = NetworkPolicyUpdate {
+            forced_policy: Some(true),
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_default_policy_change() {
+        let update = NetworkPolicyUpdate {
+            default_policy: Some(false),
+            ..Default::default()
+        };
+        let result = update.validate();
+        assert!(result.is_ok());
+    }
+
+    // ==================== NetworkPolicyUpdate::is_empty tests ====================
+
+    #[test]
+    fn is_empty_returns_true_for_default() {
+        let update = NetworkPolicyUpdate::default();
+        assert!(update.is_empty());
+    }
+
+    #[test]
+    fn is_empty_returns_false_with_new_name() {
+        let update = NetworkPolicyUpdate {
+            new_name: Some("name".to_string()),
+            ..Default::default()
+        };
+        assert!(!update.is_empty());
+    }
+
+    #[test]
+    fn is_empty_returns_false_with_add_groups() {
+        let update = NetworkPolicyUpdate {
+            add_groups: vec!["group".to_string()],
+            ..Default::default()
+        };
+        assert!(!update.is_empty());
+    }
+
+    #[test]
+    fn is_empty_returns_false_with_clear_ingress() {
+        let update = NetworkPolicyUpdate {
+            clear_ingress: true,
+            ..Default::default()
+        };
+        assert!(!update.is_empty());
+    }
+}

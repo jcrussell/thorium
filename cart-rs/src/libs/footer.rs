@@ -114,3 +114,116 @@ impl Footer {
         (28 + self.opt_len) as usize
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== new_buffer tests ====================
+
+    #[test]
+    fn new_buffer_creates_correct_size() {
+        let footer = Footer::new_buffer();
+        assert_eq!(footer.len(), FOOTER_LEN);
+    }
+
+    #[test]
+    fn new_buffer_has_magic_number_at_start() {
+        let footer = Footer::new_buffer();
+        assert_eq!(&footer[..4], MAGIC_NUM);
+    }
+
+    // ==================== write tests ====================
+
+    #[test]
+    fn write_writes_magic_number() {
+        let mut buf = [0u8; FOOTER_LEN];
+        Footer::write(&mut buf).unwrap();
+        assert_eq!(&buf[..4], MAGIC_NUM);
+    }
+
+    #[test]
+    fn write_fails_with_insufficient_buffer() {
+        let mut buf = [0u8; 10]; // Too small
+        let result = Footer::write(&mut buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn write_works_with_exact_size_buffer() {
+        let mut buf = [0u8; FOOTER_LEN];
+        let result = Footer::write(&mut buf);
+        assert!(result.is_ok());
+    }
+
+    // ==================== get tests ====================
+
+    #[test]
+    fn get_accepts_valid_footer() {
+        let footer = Footer::new_buffer();
+        // Need at least 28 bytes
+        let result = Footer::get(&footer);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_extracts_zero_opt_len() {
+        let footer = Footer::new_buffer();
+        let result = Footer::get(&footer).unwrap();
+        assert_eq!(result.opt_len, 0);
+    }
+
+    #[test]
+    fn get_rejects_invalid_magic_number() {
+        let mut buf = [0u8; FOOTER_LEN];
+        buf[..4].copy_from_slice(b"CART"); // Header magic, not footer
+        let result = Footer::get(&buf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_error_mentions_trac_magic() {
+        let mut buf = [0u8; FOOTER_LEN];
+        buf[..4].copy_from_slice(b"XXXX");
+        let result = Footer::get(&buf);
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("TRAC"));
+    }
+
+    // ==================== trim tests ====================
+
+    #[test]
+    fn trim_returns_footer_len_when_no_opt() {
+        let footer = Footer { opt_len: 0 };
+        assert_eq!(footer.trim(), FOOTER_LEN);
+    }
+
+    #[test]
+    fn trim_includes_opt_len() {
+        let footer = Footer { opt_len: 100 };
+        assert_eq!(footer.trim(), FOOTER_LEN + 100);
+    }
+
+    #[test]
+    fn trim_handles_large_opt_len() {
+        let footer = Footer { opt_len: 1_000_000 };
+        assert_eq!(footer.trim(), FOOTER_LEN + 1_000_000);
+    }
+
+    // ==================== round-trip tests ====================
+
+    #[test]
+    fn round_trip_new_buffer_then_get() {
+        let footer_buf = Footer::new_buffer();
+        let footer = Footer::get(&footer_buf).unwrap();
+        assert_eq!(footer.opt_len, 0);
+    }
+
+    #[test]
+    fn round_trip_write_then_get() {
+        let mut buf = [0u8; FOOTER_LEN];
+        Footer::write(&mut buf).unwrap();
+        let footer = Footer::get(&buf).unwrap();
+        assert_eq!(footer.opt_len, 0);
+    }
+}

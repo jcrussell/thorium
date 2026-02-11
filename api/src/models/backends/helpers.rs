@@ -127,4 +127,85 @@ mod tests {
         assert!(k8s_name.starts_with("name-with-caps"));
         assert!(is_valid_k8s_name(&k8s_name));
     }
+
+    #[test]
+    fn test_k8s_name_preserves_uuid() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let k8s_name = to_k8s_name("test", id).unwrap();
+        assert!(k8s_name.ends_with("550e8400-e29b-41d4-a716-446655440000"));
+    }
+
+    #[test]
+    fn test_k8s_name_different_uuids_produce_different_names() {
+        let name = "same-name";
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let k8s_name1 = to_k8s_name(name, id1).unwrap();
+        let k8s_name2 = to_k8s_name(name, id2).unwrap();
+        assert_ne!(k8s_name1, k8s_name2);
+    }
+
+    #[test]
+    fn test_k8s_name_numbers_only() {
+        let name = "12345";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("12345"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_hyphen_in_middle() {
+        let name = "foo-bar-baz";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("foo-bar-baz"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_underscores_replaced() {
+        let name = "foo_bar_baz";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("foo-bar-baz"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_spaces_replaced() {
+        let name = "foo bar baz";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("foo-bar-baz"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_dots_replaced() {
+        let name = "foo.bar.baz";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("foo-bar-baz"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_single_char() {
+        let name = "a";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("a-"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_consecutive_special_chars() {
+        let name = "foo!!!bar";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("foo---bar"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
+
+    #[test]
+    fn test_k8s_name_only_special_chars_after_first() {
+        let name = "a!!!";
+        let k8s_name = to_k8s_name(name, Uuid::new_v4()).unwrap();
+        assert!(k8s_name.starts_with("a----"));
+        assert!(is_valid_k8s_name(&k8s_name));
+    }
 }

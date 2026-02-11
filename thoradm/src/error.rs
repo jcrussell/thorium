@@ -353,3 +353,140 @@ impl From<dialoguer::Error> for Error {
         Error::Dialoguer(error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    // ==================== Error::new tests ====================
+
+    #[test]
+    fn error_new_from_str() {
+        let err = Error::new("test error");
+        match err {
+            Error::Generic(msg) => assert_eq!(msg, "test error"),
+            _ => panic!("Expected Generic error"),
+        }
+    }
+
+    #[test]
+    fn error_new_empty_string() {
+        let err = Error::new("");
+        match err {
+            Error::Generic(msg) => assert!(msg.is_empty()),
+            _ => panic!("Expected Generic error"),
+        }
+    }
+
+    // ==================== Display tests ====================
+
+    #[test]
+    fn display_generic_error() {
+        let err = Error::Generic("test message".to_string());
+        assert_eq!(format!("{}", err), "test message");
+    }
+
+    #[test]
+    fn display_s3_error_optional_fields() {
+        let cases: Vec<(Option<&str>, Option<&str>, Vec<&str>)> = vec![
+            (Some("NoSuchKey"), Some("The key does not exist"), vec!["NoSuchKey", "The key does not exist"]),
+            (Some("AccessDenied"), None, vec!["AccessDenied"]),
+            (None, Some("Something went wrong"), vec!["Something went wrong"]),
+            (None, None, vec![]),
+        ];
+        for (code, message, expected_substrings) in cases {
+            let err = Error::S3 {
+                code: code.map(str::to_string),
+                message: message.map(str::to_string),
+            };
+            let display = format!("{}", err);
+            for s in expected_substrings {
+                assert!(display.contains(s), "Expected '{s}' in '{display}'");
+            }
+        }
+    }
+
+    #[test]
+    fn display_rkyv_error() {
+        let err = Error::RkyvDesererialize("deserialization failed".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("RkyvDeserialize"));
+        assert!(display.contains("deserialization failed"));
+    }
+
+    // ==================== From implementations tests ====================
+
+    #[test]
+    fn from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err: Error = io_err.into();
+        match err {
+            Error::IO(_) => {}
+            _ => panic!("Expected IO error"),
+        }
+        let display = format!("{}", err);
+        assert!(display.contains("IO Error"));
+    }
+
+    #[test]
+    fn from_uuid_error() {
+        let uuid_err = Uuid::try_parse("not-a-uuid").unwrap_err();
+        let err: Error = uuid_err.into();
+        match err {
+            Error::Uuid(_) => {}
+            _ => panic!("Expected Uuid error"),
+        }
+    }
+
+    #[test]
+    fn from_serde_json_error() {
+        let json_err: serde_json::Error = serde_json::from_str::<String>("invalid").unwrap_err();
+        let err: Error = json_err.into();
+        match err {
+            Error::SerdeJson(_) => {}
+            _ => panic!("Expected SerdeJson error"),
+        }
+    }
+
+    #[test]
+    fn from_serde_yaml_error() {
+        let yaml_err: serde_yaml::Error = serde_yaml::from_str::<i32>("not: a: number").unwrap_err();
+        let err: Error = yaml_err.into();
+        match err {
+            Error::SerdeYaml(_) => {}
+            _ => panic!("Expected SerdeYaml error"),
+        }
+    }
+
+    #[test]
+    fn from_kanal_send_error() {
+        // Create a channel and drop receiver to get SendError
+        let (tx, _rx) = kanal::bounded::<()>(0);
+        drop(_rx);
+        let send_result = tx.try_send(());
+        if let Err(send_err) = send_result {
+            let err: Error = send_err.into();
+            match err {
+                Error::KanalSend(_) => {}
+                _ => panic!("Expected KanalSend error"),
+            }
+        }
+    }
+
+    #[test]
+    fn from_kanal_recv_error() {
+        // Create a channel and drop sender to get ReceiveError
+        let (tx, rx) = kanal::bounded::<()>(0);
+        drop(tx);
+        let recv_result = rx.try_recv();
+        if let Err(recv_err) = recv_result {
+            let err: Error = recv_err.into();
+            match err {
+                Error::KanalRecv(_) => {}
+                _ => panic!("Expected KanalRecv error"),
+            }
+        }
+    }
+
+}

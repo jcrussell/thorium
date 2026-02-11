@@ -791,3 +791,105 @@ pub fn mount(router: Router<AppState>) -> Router<AppState> {
                 .patch(update_worker),
         )
 }
+
+#[cfg(test)]
+mod tests {
+    /// Determines if a consistency scan is needed based on host path settings changes.
+    ///
+    /// This is the logic from settings_update that needs to be tested:
+    /// - Scan if whitelist was edited AND is active
+    /// - Scan if allow_unrestricted_host_paths changed
+    ///
+    /// # Arguments
+    ///
+    /// * `allow_changed` - Whether allow_unrestricted_host_paths changed
+    /// * `whitelist_edited` - Whether the whitelist was modified
+    /// * `whitelist_active` - Whether the whitelist is currently active (allow_unrestricted is false)
+    fn needs_scan(allow_changed: bool, whitelist_edited: bool, whitelist_active: bool) -> bool {
+        match (allow_changed, whitelist_edited, whitelist_active) {
+            (_, true, true) | (true, _, _) => true,
+            _ => false,
+        }
+    }
+
+    // ==================== Truth table tests for scan logic ====================
+    // Tests all 8 combinations of (allow_changed, whitelist_edited, whitelist_active)
+
+    #[test]
+    fn scan_logic_fff_no_scan() {
+        // Nothing changed, whitelist inactive
+        assert!(!needs_scan(false, false, false));
+    }
+
+    #[test]
+    fn scan_logic_fft_no_scan() {
+        // Nothing changed, whitelist active (but not edited)
+        assert!(!needs_scan(false, false, true));
+    }
+
+    #[test]
+    fn scan_logic_ftf_no_scan() {
+        // Whitelist edited but inactive - no scan needed
+        assert!(!needs_scan(false, true, false));
+    }
+
+    #[test]
+    fn scan_logic_ftt_scan() {
+        // Whitelist edited and active - SCAN NEEDED
+        assert!(needs_scan(false, true, true));
+    }
+
+    #[test]
+    fn scan_logic_tff_scan() {
+        // Allow changed, nothing else - SCAN NEEDED
+        assert!(needs_scan(true, false, false));
+    }
+
+    #[test]
+    fn scan_logic_tft_scan() {
+        // Allow changed, whitelist active - SCAN NEEDED
+        assert!(needs_scan(true, false, true));
+    }
+
+    #[test]
+    fn scan_logic_ttf_scan() {
+        // Allow changed, whitelist edited but inactive - SCAN NEEDED (due to allow change)
+        assert!(needs_scan(true, true, false));
+    }
+
+    #[test]
+    fn scan_logic_ttt_scan() {
+        // All conditions true - SCAN NEEDED
+        assert!(needs_scan(true, true, true));
+    }
+
+    // ==================== Semantic tests for scan logic ====================
+
+    #[test]
+    fn scan_when_unrestricted_host_paths_toggled() {
+        // When allow_unrestricted_host_paths changes, always scan
+        assert!(needs_scan(true, false, false));
+        assert!(needs_scan(true, false, true));
+        assert!(needs_scan(true, true, false));
+        assert!(needs_scan(true, true, true));
+    }
+
+    #[test]
+    fn scan_when_active_whitelist_edited() {
+        // When whitelist is active and edited, scan
+        assert!(needs_scan(false, true, true));
+    }
+
+    #[test]
+    fn no_scan_when_inactive_whitelist_edited() {
+        // When whitelist is inactive, editing it doesn't require a scan
+        assert!(!needs_scan(false, true, false));
+    }
+
+    #[test]
+    fn no_scan_when_no_changes() {
+        // No changes means no scan
+        assert!(!needs_scan(false, false, false));
+        assert!(!needs_scan(false, false, true));
+    }
+}

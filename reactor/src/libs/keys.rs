@@ -53,3 +53,74 @@ pub async fn exists(path: &PathBuf, token: &str) -> Result<bool, Error> {
     // this file doesn't currently exist
     Ok(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== base_path tests ====================
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn base_path_linux() {
+        let path = base_path();
+        assert_eq!(path, PathBuf::from("/opt/thorium-keys"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn base_path_windows() {
+        let path = base_path();
+        assert_eq!(path, PathBuf::from("C:\\thorium\\keys"));
+    }
+
+    #[test]
+    fn base_path_is_absolute() {
+        let path = base_path();
+        assert!(path.is_absolute());
+    }
+
+    // ==================== path() tests ====================
+
+    #[test]
+    fn path_includes_username() {
+        let p = path("testuser");
+        let path_str = p.to_string_lossy();
+        assert!(path_str.contains("testuser"));
+    }
+
+    #[test]
+    fn path_ends_with_keys_yml() {
+        let p = path("anyuser");
+        assert!(p.ends_with("keys.yml"));
+    }
+
+    #[test]
+    fn path_contains_base_path() {
+        let p = path("user");
+        let base = base_path();
+        assert!(p.starts_with(base));
+    }
+
+    #[test]
+    fn path_different_users_different_paths() {
+        let p1 = path("user1");
+        let p2 = path("user2");
+        assert_ne!(p1, p2);
+    }
+
+    #[test]
+    fn path_empty_username() {
+        // Should still work with empty username
+        let p = path("");
+        assert!(p.ends_with("keys.yml"));
+    }
+
+    #[test]
+    fn path_special_chars_username() {
+        // Usernames with special chars
+        let p = path("user-with-dashes");
+        let path_str = p.to_string_lossy();
+        assert!(path_str.contains("user-with-dashes"));
+    }
+}
