@@ -1,8 +1,22 @@
+use argon2::{Algorithm, Argon2, Version};
 use bb8_redis::{bb8, RedisConnectionManager};
 use std::collections::HashMap;
 
 use crate::utils::{ApiError, Shared};
 use crate::{bad, unavailable};
+
+/// Build an Argon2 hasher with the given secret key
+///
+/// This is the shared Argon2 configuration used across the codebase for
+/// password hashing and PAT token hashing.
+pub fn build_argon2(secret_key: &str) -> Result<Argon2<'_>, ApiError> {
+    Ok(Argon2::new_with_secret(
+        secret_key.as_bytes(),
+        Algorithm::Argon2id,
+        Version::V0x13,
+        argon2::Params::default(),
+    )?)
+}
 
 /// Gets a connection from the connection pool
 #[doc(hidden)]

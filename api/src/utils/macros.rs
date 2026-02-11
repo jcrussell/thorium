@@ -296,6 +296,89 @@ macro_rules! can_create_all {
     };
 }
 
+/// Require a specific scope for PAT authentication
+///
+/// Session tokens have all scopes implicitly, so this only restricts PATs.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! require_scope {
+    ($auth:expr, $scope:expr) => {
+        if !$auth.has_scope($scope) {
+            tracing::event!(
+                tracing::Level::WARN,
+                scope_missing = true,
+                required_scope = stringify!($scope),
+                user = $auth.username()
+            );
+            return $crate::unauthorized!("Insufficient permissions for this operation".to_owned());
+        }
+    };
+}
+
+/// Require any of the specified scopes for PAT authentication
+#[doc(hidden)]
+#[macro_export]
+macro_rules! require_any_scope {
+    ($auth:expr, $($scope:expr),+) => {{
+        let scopes = vec![$($scope),+];
+        if !$auth.has_any_scope(&scopes) {
+            tracing::event!(
+                tracing::Level::WARN,
+                scope_missing = true,
+                user = $auth.username()
+            );
+            return $crate::unauthorized!("Insufficient scope for this operation");
+        }
+    }};
+}
+
+/// Require all of the specified scopes for PAT authentication
+#[doc(hidden)]
+#[macro_export]
+macro_rules! require_all_scopes {
+    ($auth:expr, $($scope:expr),+) => {{
+        let scopes = vec![$($scope),+];
+        if !$auth.has_all_scopes(&scopes) {
+            tracing::event!(
+                tracing::Level::WARN,
+                scope_missing = true,
+                user = $auth.username()
+            );
+            return $crate::unauthorized!("Insufficient scopes for this operation");
+        }
+    }};
+}
+
+/// Check group access with PAT restrictions
+///
+/// Returns unauthorized if the auth context cannot access the specified group.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! check_group_access {
+    ($auth:expr, $group:expr) => {
+        if !$auth.can_access_group($group) {
+            tracing::event!(
+                tracing::Level::WARN,
+                group_restricted = true,
+                group = $group,
+                user = $auth.username()
+            );
+            return $crate::unauthorized!("Insufficient permissions for this operation".to_owned());
+        }
+    };
+}
+
+/// Check access to all groups with PAT restrictions
+#[doc(hidden)]
+#[macro_export]
+macro_rules! check_all_groups_access {
+    ($auth:expr, $groups:expr) => {
+        for group in $groups.iter() {
+            $crate::check_group_access!($auth, group);
+        }
+    };
+}
+
 /// Update a value if the new value is not None
 #[doc(hidden)]
 #[macro_export]

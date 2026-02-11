@@ -1,6 +1,7 @@
 //! Wrappers for all objects within Thorium
 
 mod associations;
+pub mod auth;
 mod bans;
 pub mod conversions;
 pub mod cursors;
@@ -18,6 +19,7 @@ pub mod jobs;
 pub mod logs;
 pub mod network_policies;
 pub mod notifications;
+pub mod pats;
 pub mod pipelines;
 pub mod reactions;
 pub mod requisitions;
@@ -133,6 +135,11 @@ pub use users::{
     AuthResponse, Key, ScrubbedUser, Theme, UnixInfo, User, UserCreate, UserRole, UserSettings,
     UserSettingsUpdate, UserUpdate,
 };
+pub use pats::{
+    PatCreateRequest, PatCreateResponse, PatListParams, PatUpdateRequest, PersonalAccessToken,
+    ScopeBundleInfo, ScopeInfo, TokenScope, PAT_PREFIX,
+};
+pub use auth::AuthContext;
 pub use version::{Arch, Component, Os, Version};
 pub use volumes::{ConfigMap, HostPath, HostPathTypes, NFS, Secret, Volume, VolumeTypes};
 

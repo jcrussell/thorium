@@ -132,7 +132,8 @@ fn build_app(
     use axum::{http::Request, response::Response};
     use routes::{
         associations, basic, binaries, docs, entities, events, files, groups, images, jobs, mcp,
-        network_policies, pipelines, reactions, repos, search, streams, system, trees, ui, users,
+        network_policies, pats, pipelines, reactions, repos, search, streams, system, trees, ui,
+        users,
     };
     use std::time::Duration;
     use tower_http::set_header::SetResponseHeaderLayer;
@@ -166,6 +167,7 @@ fn build_app(
     api_router = streams::mount(api_router);
     api_router = system::mount(api_router);
     api_router = users::mount(api_router);
+    api_router = pats::mount(api_router);
     api_router = trees::mount(api_router);
     api_router = mcp::mount(api_router, &conf);
     // add our api routes

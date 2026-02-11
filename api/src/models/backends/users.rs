@@ -3,7 +3,6 @@
 
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::{Algorithm, Argon2, Version};
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::StatusCode;
 use axum::http::request::Parts;
@@ -20,8 +19,8 @@ use tracing::{Level, Span, event, instrument};
 use super::db;
 use crate::conf::Ldap;
 use crate::models::{
-    AuthResponse, Group, ImageScaler, Key, ScrubbedUser, UnixInfo, User, UserCreate, UserRole,
-    UserSettingsUpdate, UserUpdate,
+    AuthContext, AuthResponse, Group, ImageScaler, Key, PersonalAccessToken, ScrubbedUser, UnixInfo,
+    User, UserCreate, UserRole, UserSettingsUpdate, UserUpdate, PAT_PREFIX,
 };
 use crate::utils::shared::EmailClient;
 use crate::utils::{ApiError, AppState, Shared, bounder};
@@ -72,15 +71,9 @@ impl Header for Key {
 #[macro_export]
 macro_rules! hash_pw {
     ($raw:expr, $secret_key:expr) => {
-        // hash this password with our salt
-        Argon2::new_with_secret(
-            $secret_key.as_bytes(),
-            Algorithm::Argon2id,
-            Version::V0x13,
-            argon2::Params::default(),
-        )?
-        .hash_password($raw.as_bytes(), &SaltString::generate(&mut OsRng))?
-        .to_string()
+        $crate::models::backends::db::helpers::build_argon2($secret_key)?
+            .hash_password($raw.as_bytes(), &SaltString::generate(&mut OsRng))?
+            .to_string()
     };
 }
 
@@ -145,15 +138,8 @@ async fn basic_auth_redis(
 ) -> Result<(), ApiError> {
     // parse our password hash
     let parsed_hash = PasswordHash::new(password_hash)?;
-    // get our key
-    let secret_key = shared.config.thorium.secret_key.as_bytes();
     // build an argon hasher
-    let argon = Argon2::new_with_secret(
-        secret_key,
-        Algorithm::Argon2id,
-        Version::V0x13,
-        argon2::Params::default(),
-    )?;
+    let argon = db::helpers::build_argon2(&shared.config.thorium.secret_key)?;
     // verify this user provided the correct password
     match argon.verify_password(password.as_bytes(), &parsed_hash) {
         Ok(()) => Ok(()),
@@ -329,16 +315,28 @@ async fn get_unix_info(
     unavailable!(format!("Ldap did not return UNIX info for {}", username))
 }
 
+/// Check that a user has verified their email
+fn check_verified(user: &User) -> Result<(), ApiError> {
+    if !user.verified {
+        return unauthorized!("Email has not been verified".to_owned());
+    }
+    Ok(())
+}
+
 /// The different support auth methods
 enum AuthMethods {
-    /// Authenticate with a token
+    /// Authenticate with a session token
     Token(String),
     /// Authenticate with a password
     Password { username: String, password: String },
+    /// Authenticate with a Personal Access Token
+    Pat(String),
 }
 
 impl AuthMethods {
     /// Authenticates a user based on an auth header
+    ///
+    /// Returns a User for session/password auth
     ///
     /// # Arguments
     ///
@@ -351,13 +349,68 @@ impl AuthMethods {
             Self::Password { username, password } => {
                 password_auth(username, password, shared).await
             }
+            Self::Pat(_) => {
+                // PAT auth should use authenticate_context instead
+                event!(Level::WARN, msg = "PAT token used on session-only endpoint");
+                return unauthorized!();
+            }
         }?;
-        // make sure this user has been verified
-        if !user.verified {
-            // our user has not been verified yet so reject this request
-            return unauthorized!("Email has not been verified".to_owned());
-        }
+        check_verified(&user)?;
         Ok(user)
+    }
+
+    /// Authenticates and returns an AuthContext
+    ///
+    /// This method handles both session tokens and PATs, returning the appropriate
+    /// AuthContext variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `shared` - Shared Thorium objects
+    #[instrument(name = "User::authenticate_context", skip_all, err(Debug))]
+    pub async fn authenticate_context(&self, shared: &Shared) -> Result<AuthContext, ApiError> {
+        match self {
+            Self::Token(token) => {
+                let user = token_auth(token, shared).await?;
+                check_verified(&user)?;
+                Ok(AuthContext::Session(user))
+            }
+            Self::Password { username, password } => {
+                let user = password_auth(username, password, shared).await?;
+                check_verified(&user)?;
+                Ok(AuthContext::Session(user))
+            }
+            Self::Pat(token) => {
+                // Authenticate with PAT
+                let pat = db::pats::authenticate(token, shared).await?;
+
+                // Get the user who owns this PAT
+                let user = db::users::get(&pat.owner, shared).await?;
+                check_verified(&user)?;
+
+                // Update last_used_at asynchronously with a timeout to prevent
+                // unbounded task accumulation under sustained load
+                let owner = pat.owner.clone();
+                let pat_id = pat.id;
+                let shared_clone = shared.clone();
+                tokio::spawn(async move {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        db::pats::update_last_used(&owner, &pat_id, &shared_clone),
+                    ).await {
+                        Ok(Err(e)) => {
+                            event!(Level::WARN, msg = "Failed to update PAT last_used_at", error = ?e);
+                        }
+                        Err(_) => {
+                            event!(Level::WARN, msg = "PAT last_used_at update timed out");
+                        }
+                        Ok(Ok(())) => {}
+                    }
+                });
+
+                Ok(AuthContext::Pat { user, pat })
+            }
+        }
     }
 
     /// Build our auth method from a str
@@ -400,6 +453,12 @@ impl AuthMethods {
     fn token(raw: &str) -> Result<Self, ApiError> {
         // try to decode this token value
         let decoded = b64_decode(raw)?;
+
+        // Check if this is a PAT (starts with thp_)
+        if decoded.starts_with(PAT_PREFIX) {
+            return Ok(AuthMethods::Pat(decoded));
+        }
+
         Ok(AuthMethods::Token(decoded))
     }
 
@@ -1062,6 +1121,42 @@ where
             if let Ok(header_str) = header_val.to_str() {
                 if let Ok(user) = User::auth(header_str, &state.shared).await {
                     return Ok(user);
+                }
+            }
+        }
+        // we failed to extract our auth info from our headers
+        Err(AuthReject)
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthContext
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AuthReject;
+    /// Gets an authenticated context from a request
+    ///
+    /// This extractor handles both session tokens and PATs, returning the
+    /// appropriate AuthContext variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `parts` - The request parts to extract our auth from
+    /// * `state` - Shared Thorium objects
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // get the shared app state
+        let state = AppState::from_ref(state);
+        // extract the authorization headers
+        if let Some(header_val) = parts.headers.get("authorization") {
+            // try to cast our authorization header value to a str
+            if let Ok(header_str) = header_val.to_str() {
+                // parse the auth method
+                if let Ok(method) = AuthMethods::from_str(header_str) {
+                    // authenticate and get context
+                    if let Ok(context) = method.authenticate_context(&state.shared).await {
+                        return Ok(context);
+                    }
                 }
             }
         }

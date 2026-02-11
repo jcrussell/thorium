@@ -510,6 +510,8 @@ pub fn build_delete(
 /// * `shared` - Shared Thorium objects
 #[instrument(name = "db::users::delete", skip_all, fields(user = user.username), err(Debug))]
 pub async fn delete(user: &User, shared: &Shared) -> Result<(), ApiError> {
+    // Clean up all PATs for this user before deleting the user
+    super::pats::delete_all(&user.username, shared).await?;
     // build pipeline to save a user into redis
     let mut pipe = redis::pipe();
     build_delete(&mut pipe, user, shared);
